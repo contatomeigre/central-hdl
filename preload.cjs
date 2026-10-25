@@ -15,10 +15,11 @@ contextBridge.exposeInMainWorld('central', {
   config: () => call('config'),
   salvarConfig: (cfg) => call('salvar-config', cfg),
   info: () => call('central'),
+  verificarCentral: () => call('verificar-central'),
   reiniciar: () => call('reiniciar-central'),
-  /** Eventos: estado, progresso, ocupado, central-atualizada. */
+  /** Eventos: estado, progresso, ocupado, central-status. */
   on: (event, fn) => {
-    if (!['estado', 'progresso', 'ocupado', 'central-atualizada'].includes(event)) return;
+    if (!['estado', 'progresso', 'ocupado', 'central-status'].includes(event)) return;
     ipcRenderer.on(event, (_e, payload) => fn(payload));
   },
 });

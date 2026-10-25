@@ -138,13 +138,47 @@ api.on('ocupado', ({ id, status }) => {
   const a = apps.find((x) => x.id === id);
   if (a) { a.ocupado = status; render(); }
 });
-api.on('central-atualizada', mostrarFaixaCentral);
+api.on('central-status', mostrarStatusCentral);
 
-function mostrarFaixaCentral({ versao }) {
+// ------------------------------------------------------------ atualização da própria Central
+const reiniciarCentral = () => executar(() => api.reiniciar());
+
+function mostrarStatusCentral(st) {
+  const btn = $('central-atualizar');
+  const status = $('central-status');
   const faixa = $('faixa-central');
-  faixa.replaceChildren(`Uma nova versão da Central HDL (${versao}) está pronta.`,
-    h('button', { class: 'btn', onclick: () => api.reiniciar() }, 'Reiniciar agora'));
-  faixa.hidden = false;
+  btn.hidden = st.estado === 'indisponivel';
+  btn.disabled = st.estado === 'verificando' || st.estado === 'baixando';
+  btn.classList.toggle('destaque', st.estado === 'pronta');
+  btn.textContent = {
+    verificando: 'Verificando…',
+    baixando: `Baixando ${st.progresso ?? 0}%…`,
+    pronta: `Reiniciar e atualizar para ${st.versao}`,
+  }[st.estado] ?? 'Procurar atualização da Central';
+  status.textContent = {
+    'em-dia': '· em dia',
+    baixando: `· nova versão ${st.versao}`,
+    erro: '· falha ao verificar',
+    indisponivel: '· atualização só na versão instalada',
+  }[st.estado] ?? '';
+  status.title = st.erro ?? '';
+  faixa.hidden = st.estado !== 'pronta';
+  if (st.estado === 'pronta') {
+    faixa.replaceChildren(`Uma nova versão da Central HDL (${st.versao}) está pronta.`,
+      h('button', { class: 'btn', onclick: reiniciarCentral }, 'Reiniciar e atualizar'));
+  }
+}
+
+async function verificarCentral({ avisar = true } = {}) {
+  try {
+    const st = await api.verificarCentral();
+    mostrarStatusCentral(st);
+    if (!avisar) return;
+    if (st.estado === 'em-dia') toast('A Central HDL já está na versão mais recente.');
+    else if (st.estado === 'erro') toast(st.erro, 'erro');
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
 }
 
 for (const tab of document.querySelectorAll('[data-filtro]')) {
@@ -155,7 +189,11 @@ for (const tab of document.querySelectorAll('[data-filtro]')) {
   });
 }
 $('busca').addEventListener('input', render);
-$('verificar').addEventListener('click', atualizarEstado);
+$('verificar').addEventListener('click', () => { atualizarEstado(); verificarCentral({ avisar: false }); });
+$('central-atualizar').addEventListener('click', () => {
+  if ($('central-atualizar').classList.contains('destaque')) reiniciarCentral();
+  else verificarCentral();
+});
 $('atualizar-tudo').addEventListener('click', async () => {
   for (const a of apps.filter((x) => x.atualizacao)) await instalar(a, { silencioso: true });
   toast('Atualizações concluídas.');
@@ -173,6 +211,6 @@ for (const id of ['cfg-auto', 'cfg-login']) {
 
 api.info().then((i) => {
   $('versao').textContent = `versão ${i.versao}`;
-  if (i.atualizacao) mostrarFaixaCentral(i.atualizacao);
+  mostrarStatusCentral(i.status);
 });
 atualizarEstado();

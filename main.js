@@ -199,20 +199,46 @@ function notify(title, body) {
 }
 
 // ------------------------------------------------------------ atualização da própria Central
-let selfUpdate = null;
+// estado: ocioso | verificando | baixando | pronta | em-dia | erro | indisponivel (fora do instalador)
+let selfStatus = { estado: app.isPackaged ? 'ocioso' : 'indisponivel' };
+function setSelfStatus(next) {
+  // com a versão nova já baixada, só um reinício muda o estado
+  if (selfStatus.estado === 'pronta' && next.estado !== 'pronta') return;
+  selfStatus = next;
+  send('central-status', selfStatus);
+}
 function setupSelfUpdate() {
   if (!app.isPackaged) return;
   const { autoUpdater } = updater;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => setSelfStatus({ estado: 'verificando' }));
+  autoUpdater.on('update-available', ({ version }) => setSelfStatus({ estado: 'baixando', versao: version, progresso: 0 }));
+  autoUpdater.on('update-not-available', () => setSelfStatus({ estado: 'em-dia', verificadoEm: Date.now() }));
+  autoUpdater.on('download-progress', ({ percent }) =>
+    setSelfStatus({ ...selfStatus, estado: 'baixando', progresso: Math.round(percent ?? 0) }));
   autoUpdater.on('update-downloaded', ({ version }) => {
-    selfUpdate = { versao: version };
-    send('central-atualizada', selfUpdate);
+    setSelfStatus({ estado: 'pronta', versao: version });
+    notify('Atualização da Central HDL', `A versão ${version} está pronta. Reinicie a Central para instalar.`);
   });
-  autoUpdater.on('error', (err) => console.warn('[central] atualização:', err?.message ?? err));
-  const check = () => autoUpdater.checkForUpdates().catch(() => {});
-  check();
-  setInterval(check, CHECK_EVERY_MS * 4);
+  autoUpdater.on('error', (err) => {
+    console.warn('[central] atualização:', err?.message ?? err);
+    setSelfStatus({ estado: 'erro', erro: 'Não foi possível procurar a atualização. Verifique a internet e tente de novo.' });
+  });
+  checkSelfUpdate();
+  setInterval(checkSelfUpdate, CHECK_EVERY_MS * 4);
+}
+/** Procura versão nova da Central (baixa sozinha se houver). */
+async function checkSelfUpdate() {
+  if (!app.isPackaged) return selfStatus;
+  if (['verificando', 'baixando', 'pronta'].includes(selfStatus.estado)) return selfStatus;
+  await updater.autoUpdater.checkForUpdates().catch(() => {}); // erros chegam pelo evento 'error'
+  return selfStatus;
+}
+function restartToUpdate() {
+  if (selfStatus.estado !== 'pronta') throw new Error('Ainda não há uma atualização da Central pronta para instalar.');
+  quitting = true;
+  updater.autoUpdater.quitAndInstall(true, true);
 }
 
 // ------------------------------------------------------------ janela e bandeja
@@ -265,7 +291,8 @@ function buildTray() {
   tray.on('click', show);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Abrir a Central HDL', click: show },
-    { label: 'Procurar atualizações', click: () => backgroundCheck() },
+    { label: 'Procurar atualizações', click: () => { backgroundCheck(); checkSelfUpdate(); } },
+    { label: 'Atualizar a Central HDL', click: () => (selfStatus.estado === 'pronta' ? restartToUpdate() : (show(), checkSelfUpdate())) },
     { type: 'separator' },
     { label: 'Sair', click: () => { quitting = true; app.quit(); } },
   ]));
@@ -284,8 +311,9 @@ handle('salvar-config', (cfg) => writeConfig({
   atualizarSozinho: Boolean(cfg?.atualizarSozinho),
   iniciarComWindows: Boolean(cfg?.iniciarComWindows),
 }));
-handle('central', () => ({ versao: app.getVersion(), atualizacao: selfUpdate }));
-handle('reiniciar-central', () => { quitting = true; updater.autoUpdater.quitAndInstall(true, true); });
+handle('central', () => ({ versao: app.getVersion(), status: selfStatus }));
+handle('verificar-central', () => checkSelfUpdate());
+handle('reiniciar-central', () => restartToUpdate());
 
 // ------------------------------------------------------------ ciclo de vida
 app.on('second-instance', show);
