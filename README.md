@@ -27,24 +27,23 @@ Tudo fica na conta **`contatomeigre`** do GitHub, em repositórios **públicos**
 - `contatomeigre/central-hdl`: este projeto (com `catalogo.json` e `icones/` na branch `main`) e as versões da própria Central.
 - `contatomeigre/prosa-releases`: só as versões do Prosa.
 
-## Antes de publicar (em cada terminal novo)
-
-A conta `contatomeigre` está logada no GitHub CLI. O token sai dele, sem precisar criar um à mão:
-
-```powershell
-$env:GITHUB_TOKEN = $null                               # esta máquina tem o token do matheusmeigre nessa variável
-$env:GH_TOKEN = gh auth token --user contatomeigre
-```
-
 ## Publicar uma versão nova do Prosa
 
 ```powershell
 cd ..\aplicativo-independente
-npm version patch --no-git-tag-version   # 0.3.0 → 0.3.1 (ou minor / major)
+npm version patch --no-git-tag-version   # 0.3.1 → 0.3.2 (ou minor / major)
 npm run publicar
 ```
 
-O `electron-builder` gera o instalador e cria a release `v0.3.1` em `prosa-releases`, com o `.exe`, o `.blockmap` e o `latest.yml`. Em até 30 min as Centrais (e os Prosas abertos) encontram a versão nova.
+O `npm run publicar` (`desktop/scripts/publicar.mjs`):
+
+1. pega o token da conta `contatomeigre` no GitHub CLI, sem precisar criar ou colar token;
+2. cria a release `v0.3.2` em `prosa-releases` (feito antes, porque o electron-builder sozinho às vezes falha na primeira publicação);
+3. gera o instalador e envia o `.exe`, o `.blockmap` e o `latest.yml`.
+
+Em até 30 min as Centrais (e os Prosas abertos) encontram a versão nova. Se o GitHub CLI pedir login: `gh auth login --web` com a conta `contatomeigre` (veja o login com conta secundária abaixo).
+
+Para conferir uma versão publicada: `https://github.com/contatomeigre/prosa-releases/releases/latest/download/latest.yml`.
 
 > As releases são criadas como **publicadas** (`releaseType: release`). Para revisar antes, troque para `"draft"` no `package.json` e publique a release manualmente no GitHub.
 
@@ -57,6 +56,17 @@ npm run publicar
 
 A **primeira** instalação é a única feita à mão: envie para as pessoas o `Central-HDL-Setup-x.y.z.exe`, que fica na release do repositório `central-hdl`. O link fixo da última versão é:
 `https://github.com/contatomeigre/central-hdl/releases/latest`
+
+## Login com a conta secundária no GitHub CLI
+
+Esta máquina tem uma variável `GITHUB_TOKEN` com o token do `matheusmeigre`, que tem prioridade sobre as contas do `gh`. Para logar na `contatomeigre`:
+
+```powershell
+$env:GITHUB_TOKEN = $null
+gh auth login --hostname github.com --git-protocol https --web
+```
+
+Copie o código e aperte Enter; feche a aba que abrir no navegador normal. Depois, numa **janela anônima** logada na `contatomeigre`, abra https://github.com/login/device e cole o código. O script de publicação já ignora o `GITHUB_TOKEN` sozinho.
 
 ## Colocar mais um programa da empresa na Central
 

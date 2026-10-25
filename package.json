@@ -13,7 +13,7 @@
     "icone": "node scripts/gerar-icone.mjs",
     "test": "node --test \"test/**/*.test.js\"",
     "dist": "electron-builder --win nsis --publish never",
-    "publicar": "electron-builder --win nsis --publish always"
+    "publicar": "node scripts/publicar.mjs"
   },
   "dependencies": {
     "electron-updater": "^6.8.11"
