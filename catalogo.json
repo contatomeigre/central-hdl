@@ -1,0 +1,14 @@
+{
+  "apps": [
+    {
+      "id": "prosa",
+      "nome": "Prosa",
+      "descricao": "Chat, chamadas de áudio e vídeo, reuniões e organograma da equipe.",
+      "categoria": "Comunicação",
+      "repo": "contatomeigre/prosa-releases",
+      "nomeWindows": "Prosa",
+      "executavel": "Prosa.exe",
+      "icone": "https://raw.githubusercontent.com/contatomeigre/central-hdl/main/icones/prosa.png"
+    }
+  ]
+}

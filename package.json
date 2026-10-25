@@ -1,0 +1,66 @@
+{
+  "name": "central-hdl",
+  "productName": "Central HDL",
+  "version": "1.0.0",
+  "description": "Central HDL — loja de aplicativos desktop da HDL Soluções: instala e mantém atualizados os programas da empresa.",
+  "author": "Matheus Meigre",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "node scripts/abrir.mjs",
+    "icone": "node scripts/gerar-icone.mjs",
+    "test": "node --test \"test/**/*.test.js\"",
+    "dist": "electron-builder --win nsis --publish never",
+    "publicar": "electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "br.hdl.central",
+    "productName": "Central HDL",
+    "copyright": "HDL Soluções",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "lib/**/*",
+      "preload.cjs",
+      "ui/**/*",
+      "catalogo.json",
+      "icone.png",
+      "package.json"
+    ],
+    "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "contatomeigre",
+        "repo": "central-hdl",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Central HDL",
+      "artifactName": "Central-HDL-Setup-${version}.${ext}"
+    }
+  }
+}
