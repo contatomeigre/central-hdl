@@ -25,14 +25,14 @@
     <button role="tab" data-filtro="instalados" aria-selected="false">Instalados</button>
     <button role="tab" data-filtro="atualizacoes" aria-selected="false">Atualizações <span id="n-atualizacoes" class="selo" hidden></span></button>
   </nav>
-  <main id="lista" class="grade" aria-live="polite"><p class="vazio">Carregando catálogo…</p></main>
+  <main id="lista" class="grade"><p class="vazio">Carregando catálogo…</p></main>
 
   <dialog id="config">
     <form method="dialog">
       <h2>Configurações</h2>
       <label class="alternador"><span><b>Atualizar apps automaticamente</b><small>Instala novas versões em segundo plano. Apps abertos não são interrompidos: você recebe um aviso.</small></span><input type="checkbox" id="cfg-auto"></label>
       <label class="alternador"><span><b>Iniciar com o Windows</b><small>A Central fica na bandeja e mantém tudo atualizado.</small></span><input type="checkbox" id="cfg-login"></label>
-      <div class="dlg-rodape"><button class="btn" value="ok">Fechar</button></div>
+      <div class="dlg-rodape"><button id="abrir-registros" class="link-btn" type="button">Abrir pasta de registros</button><button class="btn" value="ok">Fechar</button></div>
     </form>
   </dialog>
   <div id="toasts" aria-live="polite"></div>

@@ -50,9 +50,16 @@ Para conferir uma versão publicada: `https://github.com/contatomeigre/prosa-rel
 ## Publicar a própria Central
 
 ```powershell
+git checkout main; git pull                 # com as mudanças já mescladas na main
 npm version patch --no-git-tag-version
+git commit -am "Central HDL x.y.z"; git push
 npm run publicar
 ```
+
+O `npm run publicar` recusa publicar quando:
+
+- há alterações sem commit, você não está na `main`, ou a `main` local está diferente da `origin/main`. O instalador é gerado da pasta local; com essas travas ele corresponde exatamente ao commit da tag (a release é criada nesse commit). Em emergência: `npm run publicar -- --ignorar-git`;
+- a versão já foi publicada (a release já tem o `latest.yml`). Quem já tem essa versão nunca receberia a correção: suba a versão. Se uma publicação anterior foi interrompida antes do `latest.yml` subir, ela é retomada.
 
 A **primeira** instalação é a única feita à mão: envie para as pessoas o `Central-HDL-Setup-x.y.z.exe`, que fica na release do repositório `central-hdl`. O link fixo da última versão é:
 `https://github.com/contatomeigre/central-hdl/releases/latest`
@@ -87,7 +94,15 @@ Copie o código e aperte Enter; feche a aba que abrir no navegador normal. Depoi
    - `nomeWindows` é o nome que aparece em "Aplicativos instalados" (sem a versão), normalmente o `productName`.
    - `executavel` é o `.exe` dentro da pasta de instalação.
 
-A Central relê o catálogo a cada verificação, então **não é preciso publicar uma versão nova dela** para aparecer um app novo. Sem internet, ela usa a última cópia do catálogo que baixou.
+A Central relê o catálogo a cada verificação (a cada 30 min ou em "Procurar atualizações"), então **não é preciso publicar uma versão nova dela** para aparecer um app novo. Sem internet, ela usa a última cópia do catálogo que baixou.
+
+Cada entrada é conferida e, se tiver erro, é ignorada (as outras continuam valendo) e o motivo vai para o registro: `id` só com letras minúsculas, números e hífen, sem repetir; `nome`, `repo` (`dono/repositório`) e `executavel` obrigatórios; `executavel` é só o nome do `.exe`, sem pastas; `icone` precisa ser `https://`. Se o arquivo vier sem a lista `apps`, a Central mantém a última cópia boa.
+
+## Quando algo dá errado
+
+A Central grava o que faz em `%APPDATA%\Central HDL\logs\central.log`: verificações, instalações (com a versão), falhas e o motivo, catálogo inválido, autoatualização e erros não tratados. Passando de 1 MB, o arquivo vira `central.old.log`. Para a pessoa enviar: **Configurações › Abrir pasta de registros**.
+
+Se a atualização automática de um app falhar, a Central tenta de novo a cada verificação, mas avisa só uma vez por versão.
 
 ## Desenvolvimento
 

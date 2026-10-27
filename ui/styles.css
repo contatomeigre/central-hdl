@@ -98,7 +98,7 @@ dialog h2 { font-size: 20px; margin-bottom: 8px; }
 .alternador { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--linha); }
 .alternador small { display: block; color: var(--texto-2); font-size: 13px; }
 .alternador input { width: 18px; height: 18px; flex: none; accent-color: var(--anil); }
-.dlg-rodape { display: flex; justify-content: flex-end; padding-top: 16px; }
+.dlg-rodape { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; }
 
 #toasts { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; z-index: 10; }
 .toast { padding: 10px 16px; border-radius: 10px; background: #1b2230; color: #f2f4f8; box-shadow: var(--sombra); }

@@ -8,7 +8,8 @@ const call = async (channel, ...args) => {
 };
 
 contextBridge.exposeInMainWorld('central', {
-  estado: () => call('estado'),
+  /** atualizar: relê o catálogo do GitHub em vez da cópia em memória. */
+  estado: (opts) => call('estado', opts),
   instalar: (id, opts) => call('instalar', id, opts),
   abrir: (id) => call('abrir', id),
   desinstalar: (id) => call('desinstalar', id),
@@ -17,6 +18,7 @@ contextBridge.exposeInMainWorld('central', {
   info: () => call('central'),
   verificarCentral: () => call('verificar-central'),
   reiniciar: () => call('reiniciar-central'),
+  abrirRegistros: () => call('abrir-registros'),
   /** Eventos: estado, progresso, ocupado, central-status. */
   on: (event, fn) => {
     if (!['estado', 'progresso', 'ocupado', 'central-status'].includes(event)) return;

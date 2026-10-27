@@ -36,14 +36,32 @@ function iconeApp(a) {
   return img;
 }
 
+const ROTULOS = { preparando: 'Preparando', baixando: 'Baixando', instalando: 'Instalando', desinstalando: 'Desinstalando' };
+
+/** Porcentagem baixada, ou null quando não há como medir (barra indeterminada). */
+function porcentagem(a) {
+  const p = progresso.get(a.id);
+  return a.ocupado === 'baixando' && p?.total ? Math.round((p.got / p.total) * 100) : null;
+}
+
+/** Ajusta a barra e o texto de progresso já desenhados, sem recriar o cartão. */
+function pintarProgresso(el, a) {
+  const pct = porcentagem(a);
+  const barra = el.querySelector('.barra');
+  const span = barra.firstElementChild;
+  span.classList.toggle('indeterminada', pct === null);
+  span.style.width = pct === null ? '' : `${pct}%`;
+  if (pct === null) barra.removeAttribute('aria-valuenow'); else barra.setAttribute('aria-valuenow', String(pct));
+  el.querySelector('small').textContent = pct === null ? `${ROTULOS[a.ocupado]}…` : `${ROTULOS[a.ocupado]}… ${pct}%`;
+}
+
 function acoes(a) {
   if (a.ocupado) {
-    const p = progresso.get(a.id);
-    const pct = a.ocupado === 'baixando' && p?.total ? Math.round((p.got / p.total) * 100) : null;
-    const rotulo = { preparando: 'Preparando', baixando: 'Baixando', instalando: 'Instalando', desinstalando: 'Desinstalando' }[a.ocupado];
-    return h('div', { class: 'progresso' },
-      h('div', { class: 'barra' }, h('span', { class: pct === null ? 'indeterminada' : '', style: null })),
-      h('small', {}, pct === null ? `${rotulo}…` : `${rotulo}… ${pct}%`));
+    const el = h('div', { class: 'progresso' },
+      h('div', { class: 'barra', role: 'progressbar', 'aria-label': `${ROTULOS[a.ocupado]} ${a.nome}`, 'aria-valuemin': '0', 'aria-valuemax': '100' }, h('span')),
+      h('small'));
+    pintarProgresso(el, a);
+    return el;
   }
   if (!a.ultima && !a.instalada) return h('small', { class: 'erro' }, a.erro ?? 'Indisponível');
   const botoes = [];
@@ -58,7 +76,7 @@ function cartao(a) {
   const versao = a.instalada
     ? (a.atualizacao ? `Instalado ${a.instalada} → nova ${a.ultima.versao}` : `Instalado · versão ${a.instalada}`)
     : a.ultima ? `Versão ${a.ultima.versao}${a.ultima.tamanho ? ` · ${mb(a.ultima.tamanho)}` : ''}` : '';
-  const el = h('article', { class: `app ${a.atualizacao ? 'tem-atualizacao' : ''}` },
+  return h('article', { class: `app ${a.atualizacao ? 'tem-atualizacao' : ''}`, 'data-id': a.id },
     h('div', { class: 'app-cab' }, iconeApp(a),
       h('div', {}, h('h2', {}, a.nome), h('small', {}, a.categoria))),
     h('p', { class: 'app-desc' }, a.descricao),
@@ -68,10 +86,6 @@ function cartao(a) {
       a.instalada && a.erro ? h('span', { class: 'erro', title: 'Não foi possível consultar a última versão' }, a.erro) : null,
       a.ultima?.notas ? h('a', { href: a.ultima.notas, target: '_blank' }, `Novidades${a.ultima.data ? ` de ${data(a.ultima.data)}` : ''}`) : null),
     acoes(a));
-  const p = progresso.get(a.id);
-  const span = el.querySelector('.barra span:not(.indeterminada)');
-  if (span && p?.total) span.style.width = `${(p.got / p.total) * 100}%`;
-  return el;
 }
 
 function render() {
@@ -89,10 +103,11 @@ function render() {
   $('lista').replaceChildren(...(lista.length ? lista.map(cartao) : [h('p', { class: 'vazio' }, termo ? 'Nada encontrado.' : vazio)]));
 }
 
-async function atualizarEstado() {
+/** atualizar: relê o catálogo do GitHub (botão "Procurar atualizações"). */
+async function atualizarEstado({ atualizar = false } = {}) {
   $('verificar').disabled = true;
   try {
-    apps = await api.estado();
+    apps = await api.estado({ atualizar });
     render();
   } catch (err) {
     toast(err.message, 'erro');
@@ -132,7 +147,11 @@ api.on('estado', (lista) => { apps = lista; render(); });
 api.on('progresso', ({ id, got, total }) => {
   progresso.set(id, { got, total });
   const a = apps.find((x) => x.id === id);
-  if (a) { a.ocupado = 'baixando'; render(); }
+  if (!a) return;
+  if (a.ocupado !== 'baixando') { a.ocupado = 'baixando'; render(); return; }
+  // chega a cada 150 ms: só a barra muda, sem recriar a lista (que tiraria o foco dos botões)
+  const el = $('lista').querySelector(`[data-id="${CSS.escape(id)}"] .progresso`);
+  if (el) pintarProgresso(el, a);
 });
 api.on('ocupado', ({ id, status }) => {
   const a = apps.find((x) => x.id === id);
@@ -189,7 +208,7 @@ for (const tab of document.querySelectorAll('[data-filtro]')) {
   });
 }
 $('busca').addEventListener('input', render);
-$('verificar').addEventListener('click', () => { atualizarEstado(); verificarCentral({ avisar: false }); });
+$('verificar').addEventListener('click', () => { atualizarEstado({ atualizar: true }); verificarCentral({ avisar: false }); });
 $('central-atualizar').addEventListener('click', () => {
   if ($('central-atualizar').classList.contains('destaque')) reiniciarCentral();
   else verificarCentral();
@@ -205,6 +224,7 @@ $('abrir-config').addEventListener('click', async () => {
   $('cfg-login').checked = cfg.iniciarComWindows;
   $('config').showModal();
 });
+$('abrir-registros').addEventListener('click', () => executar(() => api.abrirRegistros()));
 for (const id of ['cfg-auto', 'cfg-login']) {
   $(id).addEventListener('change', () => executar(() => api.salvarConfig({ atualizarSozinho: $('cfg-auto').checked, iniciarComWindows: $('cfg-login').checked })));
 }

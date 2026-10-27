@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseLatestYml, compareVersions, download, latestRelease } from '../lib/releases.js';
 import { parseRegistry, findInstalled, folderOf } from '../lib/windows.js';
+import { validateCatalog } from '../lib/catalog.js';
+import { createLog } from '../lib/log.js';
 
 test('latest.yml do electron-builder', () => {
   const yml = [
@@ -115,4 +117,45 @@ test('latest.yml sem resposta desiste no prazo', async () => {
     signal.addEventListener('abort', () => { clearInterval(aberta); reject(signal.reason); });
   });
   await assert.rejects(latestRelease(fetchMudo, 'dono/repo', { timeoutMs: 50 }), /não respondeu a tempo/);
+});
+
+test('catálogo: entradas inválidas são descartadas sem derrubar as outras', () => {
+  const ok = { id: 'prosa', nome: 'Prosa', repo: 'contatomeigre/prosa-releases', executavel: 'Prosa.exe', icone: 'https://x/p.png' };
+  const { apps, problemas } = validateCatalog({
+    apps: [
+      ok,
+      { ...ok, id: 'prosa' }, // id repetido
+      { ...ok, id: 'fora', executavel: '..\\..\\Windows\\explorer.exe' }, // pastas no executável
+      { ...ok, id: 'fora2', executavel: '../x/Prosa.exe' },
+      { ...ok, id: 'sem-repo', repo: 'https://github.com/x/y' },
+      { ...ok, id: 'Maiusculo' },
+      { ...ok, id: 'icone', icone: 'javascript:alert(1)' },
+      { ...ok, id: 'meu-app', nome: 'Meu App', executavel: 'Meu App (x64).exe', nomeWindows: 'Meu App' },
+      null,
+    ],
+  });
+  assert.deepEqual(apps.map((a) => a.id), ['prosa', 'meu-app']);
+  assert.equal(problemas.length, 7);
+  assert.match(problemas[0], /entrada 2 \(prosa\): id repetido/);
+  assert.match(problemas[1], /executavel/);
+  assert.match(problemas[2], /executavel/);
+  assert.throws(() => validateCatalog({ aplicativos: [] }), /lista "apps"/);
+});
+
+test('registro em arquivo vira .old ao passar do limite', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-log-'));
+  try {
+    const log = createLog(dir, { maxBytes: 200 });
+    for (let i = 0; i < 10; i++) log.info(`linha ${i} ${'x'.repeat(40)}`);
+    log.error('último');
+    const atual = fs.readFileSync(path.join(dir, 'central.log'), 'utf8');
+    assert.ok(fs.existsSync(path.join(dir, 'central.old.log')));
+    assert.ok(atual.length < 400);
+    assert.match(atual, /ERRO  último\n$/);
+    createLog(path.join(dir, 'arquivo.txt', 'sub')); // pasta impossível: não lança
+    fs.writeFileSync(path.join(dir, 'arquivo.txt'), '');
+    createLog(path.join(dir, 'arquivo.txt', 'sub')).error('não derruba');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
