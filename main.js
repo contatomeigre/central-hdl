@@ -17,6 +17,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'icone.png');
 const CATALOG_URL = 'https://raw.githubusercontent.com/contatomeigre/central-hdl/main/catalogo.json';
 const CHECK_EVERY_MS = 30 * 60 * 1000;
+const CATALOG_TIMEOUT_MS = 30 * 1000;
 const HIDDEN_ARG = '--oculto';
 
 app.setName('Central HDL');
@@ -53,7 +54,7 @@ function applyLoginItem(cfg) {
 const CACHE_FILE = () => path.join(app.getPath('userData'), 'catalogo.json');
 async function loadCatalog() {
   try {
-    const res = await net.fetch(CATALOG_URL, { cache: 'no-store' });
+    const res = await net.fetch(CATALOG_URL, { cache: 'no-store', signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS) });
     if (!res.ok) throw new Error(String(res.status));
     const text = await res.text();
     const cat = JSON.parse(text);
@@ -105,16 +106,22 @@ const setBusy = (id, status) => {
   if (status) busy.set(id, status); else busy.delete(id);
   send('ocupado', { id, status });
 };
+/** Marca o app como ocupado antes de qualquer await, para que dois pedidos simultâneos (rotina automática e clique) não passem juntos. */
+function reserve(id, status) {
+  if (busy.has(id)) throw new Error('Já existe uma operação em andamento para este app.');
+  setBusy(id, status);
+}
 
 // ------------------------------------------------------------ instalar / atualizar / remover
 async function install(id, { fechar = false, segundoPlano = false } = {}) {
-  if (busy.has(id)) throw new Error('Já existe uma operação em andamento para este app.');
-  const a = await catalogEntry(id);
-  const wasRunning = await isRunning(a.executavel);
-  if (wasRunning && !fechar) return { precisaFechar: true };
-  setBusy(id, 'baixando');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-hdl-'));
+  reserve(id, 'preparando');
+  let dir = null;
   try {
+    const a = await catalogEntry(id);
+    const wasRunning = await isRunning(a.executavel);
+    if (wasRunning && !fechar) return { precisaFechar: true };
+    setBusy(id, 'baixando');
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-hdl-'));
     const release = await latestRelease(net.fetch, a.repo);
     const file = path.join(dir, path.basename(release.file));
     await download(net.fetch, release, file, (got, total) => send('progresso', { id, got, total }));
@@ -139,7 +146,7 @@ async function install(id, { fechar = false, segundoPlano = false } = {}) {
     return { versao: release.version };
   } finally {
     setBusy(id, null);
-    fs.rmSync(dir, { recursive: true, force: true });
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -158,11 +165,11 @@ async function launch(a) {
 }
 
 async function uninstall(id) {
-  const a = await catalogEntry(id);
-  const inst = await installedEntry(a);
-  if (!inst.uninstall) throw new Error('O Windows não informou como desinstalar este app.');
-  setBusy(id, 'desinstalando');
+  reserve(id, 'desinstalando');
   try {
+    const a = await catalogEntry(id);
+    const inst = await installedEntry(a);
+    if (!inst.uninstall) throw new Error('O Windows não informou como desinstalar este app.');
     if (await isRunning(a.executavel)) await kill(a.executavel);
     await runUninstall(inst.uninstall);
   } finally {

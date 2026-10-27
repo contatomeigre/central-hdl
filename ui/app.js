@@ -40,7 +40,7 @@ function acoes(a) {
   if (a.ocupado) {
     const p = progresso.get(a.id);
     const pct = a.ocupado === 'baixando' && p?.total ? Math.round((p.got / p.total) * 100) : null;
-    const rotulo = { baixando: 'Baixando', instalando: 'Instalando', desinstalando: 'Desinstalando' }[a.ocupado];
+    const rotulo = { preparando: 'Preparando', baixando: 'Baixando', instalando: 'Instalando', desinstalando: 'Desinstalando' }[a.ocupado];
     return h('div', { class: 'progresso' },
       h('div', { class: 'barra' }, h('span', { class: pct === null ? 'indeterminada' : '', style: null })),
       h('small', {}, pct === null ? `${rotulo}…` : `${rotulo}… ${pct}%`));

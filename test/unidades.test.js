@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parseLatestYml, compareVersions, download } from '../lib/releases.js';
+import { parseLatestYml, compareVersions, download, latestRelease } from '../lib/releases.js';
 import { parseRegistry, findInstalled, folderOf } from '../lib/windows.js';
 
 test('latest.yml do electron-builder', () => {
@@ -53,6 +53,11 @@ test('registro do Windows: apps instalados', () => {
   const programs = entries.map((e) => ({ displayName: e.values.DisplayName, version: e.values.DisplayVersion }));
   assert.equal(findInstalled(programs, 'Prosa')?.version, '0.3.0');
   assert.equal(findInstalled(programs, 'Prosa Beta'), null);
+  // outro programa que só começa com o mesmo nome não é confundido com o app
+  const outros = [{ displayName: 'Prosa Editor 2.0', version: '2.0' }, { displayName: 'Prosa', version: '1.0.0' }];
+  assert.equal(findInstalled(outros, 'Prosa')?.version, '1.0.0');
+  assert.equal(findInstalled([{ displayName: 'Prosa Editor 2.0' }], 'Prosa'), null);
+  assert.equal(findInstalled([{ displayName: 'Prosa 1.2.0-beta.1', version: '1.2.0-beta.1' }], 'Prosa')?.version, '1.2.0-beta.1');
   assert.match(entries[0].values.QuietUninstallString, /Uninstall Prosa\.exe" \/currentuser \/S$/);
   assert.equal(folderOf('"C:\\Users\\x\\Programs\\Prosa\\Uninstall Prosa.exe" /currentuser'), 'C:\\Users\\x\\Programs\\Prosa');
   assert.equal(folderOf(''), null);
@@ -75,4 +80,39 @@ test('download confere o SHA-512 e apaga arquivo adulterado', async () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+/** fetch que manda um pedaço e depois trava, como uma conexão que caiu; respeita o signal como o fetch real. */
+const fetchTravado = async (_url, { signal } = {}) => new Response(new ReadableStream({
+  start(c) {
+    c.enqueue(new Uint8Array([1, 2, 3]));
+    signal?.addEventListener('abort', () => c.error(signal.reason));
+  },
+}));
+
+test('download travado desiste em vez de prender a Central', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-teste-'));
+  try {
+    const dest = path.join(dir, 'travado.exe');
+    await assert.rejects(download(fetchTravado, { url: 'x', sha512: 'y' }, dest, null, { stallMs: 50 }), /parou de receber dados/);
+    assert.equal(fs.existsSync(dest), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('erro ao gravar o download vira rejeição, sem derrubar o processo', async () => {
+  const body = Buffer.from('instalador');
+  const fakeFetch = async () => new Response(body);
+  const dest = path.join(os.tmpdir(), 'central-pasta-que-nao-existe', 'x.exe');
+  await assert.rejects(download(fakeFetch, { url: 'x', sha512: 'y' }, dest), /ENOENT/);
+});
+
+test('latest.yml sem resposta desiste no prazo', async () => {
+  // como uma conexão aberta, o intervalo mantém o processo vivo (o timer do AbortSignal.timeout sozinho não mantém)
+  const fetchMudo = (_url, { signal }) => new Promise((_r, reject) => {
+    const aberta = setInterval(() => {}, 1000);
+    signal.addEventListener('abort', () => { clearInterval(aberta); reject(signal.reason); });
+  });
+  await assert.rejects(latestRelease(fetchMudo, 'dono/repo', { timeoutMs: 50 }), /não respondeu a tempo/);
 });

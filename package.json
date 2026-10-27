@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node scripts/abrir.mjs",
     "icone": "node scripts/gerar-icone.mjs",
-    "test": "node --test \"test/**/*.test.js\"",
+    "test": "node --test",
     "dist": "electron-builder --win nsis --publish never",
     "publicar": "node scripts/publicar.mjs"
   },
