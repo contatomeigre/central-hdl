@@ -4,7 +4,7 @@
 // no GitHub Releases, compara com o que está instalado no Windows e instala ou
 // atualiza em silêncio. Fica na bandeja e atualiza os apps sozinha.
 
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, net, Notification } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, net, Notification, safeStorage } from 'electron';
 import updater from 'electron-updater';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { latestRelease, download, compareVersions } from './lib/releases.js';
 import { installedPrograms, findInstalled, isRunning, kill, runInstaller, runUninstall } from './lib/windows.js';
+import { entrar, renovar, sair, perfil } from './lib/conta.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'icone.png');
@@ -47,6 +48,110 @@ function writeConfig(next) {
 function applyLoginItem(cfg) {
   if (!app.isPackaged) return;
   app.setLoginItemSettings({ openAtLogin: cfg.iniciarComWindows, args: [HIDDEN_ARG] });
+}
+
+// ------------------------------------------------------------ conta HDL
+// O mesmo Supabase do Prosa: quem tem conta no Prosa entra com o mesmo e-mail e senha.
+// A chave anon é pública por natureza; quem protege os dados são as regras do banco.
+const SUPABASE = {
+  url: 'https://uydadfhfqfeapnktwsus.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5ZGFkZmhmcWZlYXBua3R3c3VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4ODk2NTMsImV4cCI6MjEwODQ2NTY1M30.kbepru-9n2UQ6JVl5v7fmYA7pALDHnnM-NwT206mU_I',
+};
+const CONTA_FILE = () => path.join(app.getPath('userData'), 'conta.bin');
+const RENOVAR_ANTES_MS = 5 * 60 * 1000;
+const TENTAR_DE_NOVO_MS = 60 * 1000;
+
+let sessao = null;          // { accessToken, refreshToken, expiraEm, email, perfil }
+let semConexao = false;     // entrou com a sessão salva sem conseguir falar com o servidor
+let renovando = null;       // uma renovação por vez: o Supabase derruba a sessão se o mesmo token for usado duas vezes
+let timerRenovar = null;
+let contaCarregada = null;
+
+const estadoConta = () => (sessao ? { logado: true, semConexao, email: sessao.email, ...sessao.perfil } : { logado: false });
+
+// gravada criptografada pelo Windows (DPAPI); sem isso, a sessão vale só até fechar a Central
+function guardarSessao() {
+  if (!sessao) return fs.rmSync(CONTA_FILE(), { force: true });
+  if (safeStorage.isEncryptionAvailable()) fs.writeFileSync(CONTA_FILE(), safeStorage.encryptString(JSON.stringify(sessao)));
+}
+function lerSessao() {
+  try { return JSON.parse(safeStorage.decryptString(fs.readFileSync(CONTA_FILE()))); } catch { return null; }
+}
+
+function mudarConta(nova, { offline = false } = {}) {
+  sessao = nova;
+  semConexao = offline;
+  guardarSessao();
+  agendarRenovacao();
+  send('conta', estadoConta());
+}
+
+function agendarRenovacao(ms) {
+  clearTimeout(timerRenovar);
+  if (!sessao) return;
+  timerRenovar = setTimeout(() => renovarSessao().catch(() => {}), ms ?? Math.max(30 * 1000, sessao.expiraEm - Date.now() - RENOVAR_ANTES_MS));
+}
+
+/** Renova a sessão. Sem internet, mantém a salva e tenta de novo em 1 min; recusada, sai da conta. */
+function renovarSessao() {
+  renovando ??= (async () => {
+    const atual = sessao;
+    try {
+      const nova = await renovar(net.fetch, SUPABASE, atual.refreshToken);
+      const p = await perfil(net.fetch, SUPABASE, nova.accessToken).catch(() => atual.perfil);
+      if (sessao === atual) mudarConta({ ...nova, email: nova.email ?? atual.email, perfil: p });
+    } catch (err) {
+      if (sessao !== atual) return; // saiu da conta enquanto renovava
+      if (err.invalida) {
+        console.warn('[central] sessão recusada pelo servidor:', err.message);
+        mudarConta(null);
+      } else {
+        semConexao = true;
+        send('conta', estadoConta());
+        agendarRenovacao(TENTAR_DE_NOVO_MS);
+      }
+      throw err;
+    } finally {
+      renovando = null;
+    }
+  })();
+  return renovando;
+}
+
+/** Na abertura: recupera a sessão salva e confere com o servidor (sem internet, entra com ela mesmo assim). */
+function carregarConta() {
+  contaCarregada ??= (async () => {
+    const salva = lerSessao();
+    if (!salva?.refreshToken || !salva.perfil) return estadoConta();
+    sessao = salva;
+    await renovarSessao().catch(() => {});
+    return estadoConta();
+  })();
+  return contaCarregada;
+}
+
+async function entrarConta(email, senha) {
+  const nova = await entrar(net.fetch, SUPABASE, email, senha);
+  let p;
+  try {
+    p = await perfil(net.fetch, SUPABASE, nova.accessToken);
+  } catch (err) {
+    await sair(net.fetch, SUPABASE, nova.accessToken).catch(() => {});
+    throw err;
+  }
+  mudarConta({ ...nova, perfil: p });
+  return estadoConta();
+}
+
+async function sairConta() {
+  const atual = sessao;
+  mudarConta(null);
+  if (!atual) return estadoConta();
+  // com o token vencido o servidor recusaria o logout: renova antes só para encerrar a sessão de vez
+  let token = atual.accessToken;
+  if (atual.expiraEm - Date.now() < 30 * 1000) token = (await renovar(net.fetch, SUPABASE, atual.refreshToken).catch(() => null))?.accessToken;
+  if (token) await sair(net.fetch, SUPABASE, token).catch(() => {}); // sem internet: o servidor descarta quando vencer
+  return estadoConta();
 }
 
 // ------------------------------------------------------------ catálogo
@@ -328,6 +433,9 @@ handle('salvar-config', (cfg) => writeConfig({
 handle('central', () => ({ versao: app.getVersion(), status: selfStatus }));
 handle('verificar-central', () => checkSelfUpdate());
 handle('reiniciar-central', () => restartToUpdate());
+handle('conta', () => carregarConta());
+handle('entrar', (email, senha) => entrarConta(String(email ?? ''), String(senha ?? '')));
+handle('sair-conta', () => sairConta());
 
 // ------------------------------------------------------------ ciclo de vida
 app.on('second-instance', show);

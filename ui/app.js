@@ -49,10 +49,11 @@ const data = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '');
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const iniciais = (nome) => nome.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+
 function iconeApp(a, grande = false) {
   const cls = `app-icone${grande ? ' g' : ''}`;
-  const iniciais = a.nome.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-  const fallback = h('span', { class: cls, 'aria-hidden': 'true' }, iniciais);
+  const fallback = h('span', { class: cls, 'aria-hidden': 'true' }, iniciais(a.nome));
   if (!a.icone) return fallback;
   const img = h('img', { class: cls, src: a.icone, alt: '' });
   img.addEventListener('error', () => img.replaceWith(fallback));
@@ -243,6 +244,70 @@ api.on('ocupado', ({ id, status }) => {
   if (a) { a.ocupado = status; render(); }
 });
 api.on('central-status', mostrarStatusCentral);
+api.on('conta', mostrarConta);
+
+// ------------------------------------------------------------ conta HDL
+let conta = { logado: false };
+let bootTerminou = false;
+
+function mostrarConta(c) {
+  conta = c;
+  $('conta-card').hidden = !c.logado;
+  if (c.logado) {
+    $('conta-nome').textContent = c.nome;
+    $('conta-nome').title = c.nome;
+    $('conta-usuario').textContent = c.semConexao ? 'sem conexão' : `@${c.usuario}`;
+    $('conta-usuario').classList.toggle('ambar', Boolean(c.semConexao));
+    $('conta-usuario').title = c.semConexao ? 'Sem conexão com o servidor da HDL. Você continua com a sessão salva; ela é renovada quando a internet voltar.' : (c.email ?? '');
+    const avatar = $('conta-avatar');
+    avatar.textContent = iniciais(c.nome);
+    avatar.style.backgroundColor = c.cor ?? '';
+  }
+  // durante a tela de carregamento quem decide é o fim do carregar()
+  if (bootTerminou) telaEntrada(!c.logado);
+}
+
+function telaEntrada(mostrar) {
+  const tela = $('entrada');
+  if (tela.hidden === !mostrar) return;
+  tela.hidden = !mostrar;
+  $('casca').inert = mostrar;
+  if (!mostrar) return;
+  $('entrada-versao').textContent = versaoCentral ? `v${versaoCentral}` : '';
+  $('entrada-senha').value = '';
+  erroEntrada('');
+  $('entrada-email').focus();
+}
+
+function erroEntrada(msg) {
+  $('entrada-erro').hidden = !msg;
+  $('entrada-erro').textContent = msg;
+}
+
+$('form-entrar').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const botao = $('entrada-botao');
+  erroEntrada('');
+  botao.disabled = true;
+  botao.textContent = 'Entrando…';
+  try {
+    mostrarConta(await api.entrar($('entrada-email').value, $('entrada-senha').value));
+    $('entrada-senha').value = '';
+    toast(`Olá, ${conta.nome}!`);
+  } catch (err) {
+    erroEntrada(err.message);
+    $('entrada-senha').select();
+  } finally {
+    botao.disabled = false;
+    botao.textContent = 'Entrar';
+  }
+});
+$('esqueci').addEventListener('click', () => {
+  const txt = $('esqueci-txt');
+  txt.hidden = !txt.hidden;
+  $('esqueci').setAttribute('aria-expanded', String(!txt.hidden));
+});
+$('sair').addEventListener('click', () => executar(async () => mostrarConta(await api.sair())));
 
 // ------------------------------------------------------------ atualização da própria Central
 const reiniciarCentral = () => executar(() => api.reiniciar());
@@ -383,6 +448,11 @@ async function carregar() {
     $('boot-versao').textContent = `v${info.versao}`;
     mostrarStatusCentral(info.status);
   });
+  await etapa('Verificando sua conta HDL', 24, async () => {
+    mostrarConta(await api.conta());
+    if (!conta.logado) return { texto: 'ENTRAR', tipo: 'aviso' };
+    return conta.semConexao ? { texto: 'SEM CONEXÃO', tipo: 'aviso' } : { texto: 'CONECTADO' };
+  });
   const carregado = await etapa('Sincronizando catálogo do repositório HDL', 78, async () => {
     apps = await api.estado();
     return { texto: plural(apps.length, 'APP', 'APPS') };
@@ -397,12 +467,16 @@ async function carregar() {
     return { texto: 'PRONTO' };
   });
 
-  $('boot-etapa').textContent = carregado?.tipo === 'falha' ? 'ABRINDO A CENTRAL SEM O CATÁLOGO' : 'TUDO PRONTO · ABRINDO A CENTRAL';
+  $('boot-etapa').textContent = !conta.logado ? 'ENTRE COM SUA CONTA HDL'
+    : carregado?.tipo === 'falha' ? 'ABRINDO A CENTRAL SEM O CATÁLOGO' : 'TUDO PRONTO · ABRINDO A CENTRAL';
   $('boot-frase').textContent = 'ambiente pronto';
   // janela aberta oculta (na bandeja): os temporizadores ficam lentos, então fecha direto
   while (pct < 100 && !document.hidden) await espera(30);
   await espera(450);
   clearInterval(relogio);
+  // a tela de entrada fica por baixo da de carregamento, que some por cima dela
+  bootTerminou = true;
+  telaEntrada(!conta.logado);
   const boot = $('boot');
   boot.classList.add('saindo');
   boot.addEventListener('transitionend', () => boot.remove(), { once: true });

@@ -17,9 +17,13 @@ contextBridge.exposeInMainWorld('central', {
   info: () => call('central'),
   verificarCentral: () => call('verificar-central'),
   reiniciar: () => call('reiniciar-central'),
-  /** Eventos: estado, progresso, ocupado, central-status. */
+  /** Conta HDL: a interface recebe só nome, usuário e cor; os tokens ficam no processo principal. */
+  conta: () => call('conta'),
+  entrar: (email, senha) => call('entrar', email, senha),
+  sair: () => call('sair-conta'),
+  /** Eventos: estado, progresso, ocupado, central-status, conta. */
   on: (event, fn) => {
-    if (!['estado', 'progresso', 'ocupado', 'central-status'].includes(event)) return;
+    if (!['estado', 'progresso', 'ocupado', 'central-status', 'conta'].includes(event)) return;
     ipcRenderer.on(event, (_e, payload) => fn(payload));
   },
 });

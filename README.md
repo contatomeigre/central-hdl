@@ -22,6 +22,16 @@ instala em silêncio (/S) e reabre o app, se ele estava aberto
 - O próprio Prosa também se atualiza ao abrir (electron-updater). Quem não tem a Central continua recebendo as versões novas.
 - Para saber o que está instalado, ela lê "Aplicativos instalados" do Windows (registro `Uninstall`), procurando pelo nome em `nomeWindows`.
 
+## Conta HDL
+
+Depois da tela de carregamento, a Central pede login. A conta é a mesma do Prosa (o mesmo projeto Supabase): quem já usa o Prosa entra com o mesmo e-mail e senha.
+
+- **Sessão:** fica só no processo principal (a interface recebe apenas nome, usuário e cor do avatar), gravada em `%APPDATA%\Central HDL\conta.bin` criptografada pelo Windows (DPAPI). É renovada 5 min antes de vencer, uma renovação por vez: o Supabase derruba a sessão se o mesmo token de renovação for usado duas vezes.
+- **Ao abrir:** renova a sessão salva. Sem internet, entra com ela mesmo assim ("sem conexão" no cartão da conta) e tenta de novo a cada minuto. Se o servidor recusar (senha trocada, conta removida), volta para a tela de login.
+- **Sair** (cartão da conta, na barra lateral) encerra só a sessão da Central.
+- As atualizações automáticas dos apps continuam funcionando com a Central deslogada.
+- Ainda não há cadastro pela Central: contas novas vêm por convite (próxima etapa). "Esqueci minha senha" orienta a pedir a um administrador, porque o projeto ainda não tem serviço de e-mail.
+
 ## Onde fica cada coisa
 
 Tudo fica na conta **`contatomeigre`** do GitHub, em repositórios **públicos** que guardam só as versões. O código do Prosa não vai para lá.

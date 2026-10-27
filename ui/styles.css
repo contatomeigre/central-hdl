@@ -192,6 +192,45 @@ svg { flex: none; }
 .link-btn.destaque { padding: 8px 12px; border-radius: 8px; background: var(--ciano); color: var(--tinta-ciano); font-weight: 700; }
 .link-btn.destaque:hover { background: var(--ciano-hover); color: var(--tinta-ciano); text-decoration: none; }
 
+.conta-card { display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 12px; border: 1px solid var(--linha-suave); border-radius: 12px; background: var(--cartao); }
+.avatar { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; background: #1a3a6b; color: var(--texto-forte); font-family: var(--display); font-weight: 700; font-size: 13px; }
+.conta-txt { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.conta-txt b, .conta-txt small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conta-txt b { font-size: 13px; font-weight: 600; color: var(--texto-forte); }
+.conta-txt small { font-size: 11px; color: var(--texto-3); }
+.conta-txt small.ambar { color: var(--ambar); }
+.conta-card .icone-btn { width: 32px; height: 32px; }
+
+/* ---------------------------------------------------------------- tela de entrada */
+.entrada {
+  position: fixed; inset: 0; z-index: 40; overflow-y: auto;
+  display: flex; align-items: center; justify-content: center; padding: 88px 24px;
+  background-color: var(--fundo);
+  background-image: linear-gradient(rgba(61, 214, 245, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(61, 214, 245, .045) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.entrada-caixa { width: min(420px, 100%); margin: auto; display: flex; flex-direction: column; gap: 16px; padding: 32px; border: 1px solid var(--linha); border-radius: 16px; background: rgba(13, 18, 25, .92); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); animation: entra .3s ease-out both; }
+.entrada-cab { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.entrada-cab h1 { font-size: 28px; font-weight: 700; letter-spacing: -.02em; }
+.entrada-cab p { margin: 0; color: var(--texto-2); }
+.campo { display: flex; flex-direction: column; gap: 6px; }
+.campo span { font-size: 12px; font-weight: 500; color: var(--texto-2); }
+.campo input { height: 44px; padding: 0 14px; border: 1px solid var(--linha); border-radius: 10px; background: var(--cartao); color: var(--texto); font: inherit; outline: none; }
+.campo input:focus { border-color: var(--ciano); }
+.entrada-erro { margin: 0; padding: 10px 12px; border: 1px solid var(--perigo-linha); border-radius: 10px; color: var(--perigo); font-size: 13px; }
+.entrada-caixa .btn { width: 100%; }
+.entrada-caixa .btn:disabled { opacity: .7; }
+.entrada-ajuda { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--linha-suave); font-size: 13px; color: var(--texto-3); }
+.entrada-ajuda p { margin: 0; }
+/* janela baixa (a Central abre com 720 px): compacta para o formulário caber entre topo e rodapé */
+@media (max-height: 800px) {
+  .entrada { padding: 72px 24px; }
+  .entrada-caixa { gap: 12px; padding: 24px 28px; }
+  .entrada-caixa > .logo { display: none; }
+  .entrada-cab h1 { font-size: 24px; }
+  .entrada-ajuda { padding-top: 10px; gap: 6px; }
+}
+
 /* ---------------------------------------------------------------- botões */
 .btn { height: 44px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: 10px; background: var(--ciano); color: var(--tinta-ciano); font-weight: 700; white-space: nowrap; }
 .btn:hover:not(:disabled) { background: var(--ciano-hover); }

@@ -39,7 +39,34 @@
     <div class="boot-rodape mono"><span>© HDL Soluções</span><span><i class="ponto pulsa"></i>repositório HDL</span></div>
   </div>
 
-  <div class="casca">
+  <!-- tela de entrada: aparece depois da tela de carregamento quando não há sessão -->
+  <section id="entrada" class="entrada" aria-labelledby="entrada-titulo" hidden>
+    <span class="boot-canto c1" aria-hidden="true"></span><span class="boot-canto c2" aria-hidden="true"></span>
+    <span class="boot-canto c3" aria-hidden="true"></span><span class="boot-canto c4" aria-hidden="true"></span>
+    <div class="boot-topo mono"><span>HDL // CONTA HDL</span><span id="entrada-versao"></span></div>
+
+    <form id="form-entrar" class="entrada-caixa" novalidate>
+      <div class="logo logo-p"><span>HDL</span><i></i></div>
+      <div class="entrada-cab">
+        <span class="mono sobrancelha">// ACESSO</span>
+        <h1 id="entrada-titulo">Entrar na Central HDL</h1>
+        <p>Use a mesma conta do Prosa. Ela vale para todos os aplicativos HDL.</p>
+      </div>
+      <label class="campo"><span>E-mail</span><input id="entrada-email" type="email" autocomplete="username" spellcheck="false" required></label>
+      <label class="campo"><span>Senha</span><input id="entrada-senha" type="password" autocomplete="current-password" required></label>
+      <p id="entrada-erro" class="entrada-erro" role="alert" hidden></p>
+      <button id="entrada-botao" class="btn" type="submit">Entrar</button>
+      <div class="entrada-ajuda">
+        <button id="esqueci" class="link-btn" type="button" aria-expanded="false" aria-controls="esqueci-txt">Esqueci minha senha</button>
+        <p id="esqueci-txt" hidden>Peça a um administrador da HDL para redefinir sua senha.</p>
+        <p>Sem conta? Peça um convite a um administrador da HDL.</p>
+      </div>
+    </form>
+
+    <div class="boot-rodape mono"><span>© HDL Soluções</span><span><i class="ponto"></i>conexão segura</span></div>
+  </section>
+
+  <div id="casca" class="casca">
     <nav class="lateral" aria-label="Navegação principal">
       <div class="marca">
         <div class="logo logo-p"><span>HDL</span><i></i></div>
@@ -63,6 +90,13 @@
       </div>
 
       <div class="lateral-fim">
+        <div id="conta-card" class="conta-card" hidden>
+          <span id="conta-avatar" class="avatar" aria-hidden="true"></span>
+          <div class="conta-txt"><b id="conta-nome"></b><small id="conta-usuario" class="mono"></small></div>
+          <button id="sair" class="icone-btn" type="button" title="Sair da conta" aria-label="Sair da conta">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+          </button>
+        </div>
         <div class="central-card">
           <div class="mono central-cab"><i id="central-ponto" class="ponto pulsa"></i><span id="central-rotulo">CENTRAL</span></div>
           <span id="central-status" class="central-status" aria-live="polite"></span>

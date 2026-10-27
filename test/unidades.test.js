@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseLatestYml, compareVersions, download } from '../lib/releases.js';
 import { parseRegistry, findInstalled, folderOf } from '../lib/windows.js';
+import { entrar, renovar, perfil, sair } from '../lib/conta.js';
 
 test('latest.yml do electron-builder', () => {
   const yml = [
@@ -75,4 +76,46 @@ test('download confere o SHA-512 e apaga arquivo adulterado', async () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('conta HDL: entrar, renovar, perfil e mensagens de erro', async () => {
+  const cfg = { url: 'https://exemplo.supabase.co', anonKey: 'anon' };
+  const chamadas = [];
+  const resposta = (status, corpo) => async (url, init) => {
+    chamadas.push({ url, init });
+    return new Response(corpo === undefined ? null : JSON.stringify(corpo), { status });
+  };
+
+  const ok = { access_token: 'a1', refresh_token: 'r1', expires_at: 2000000000, user: { email: 'ana@hdl.com' } };
+  const s = await entrar(resposta(200, ok), cfg, ' ana@hdl.com ', 'segredo');
+  assert.deepEqual(s, { accessToken: 'a1', refreshToken: 'r1', expiraEm: 2000000000000, email: 'ana@hdl.com' });
+  assert.match(chamadas[0].url, /\/auth\/v1\/token\?grant_type=password$/);
+  assert.equal(chamadas[0].init.headers.apikey, 'anon');
+  assert.deepEqual(JSON.parse(chamadas[0].init.body), { email: 'ana@hdl.com', password: 'segredo' });
+
+  // os dois formatos de erro do Supabase
+  await assert.rejects(entrar(resposta(400, { error: 'invalid_grant', error_description: 'Invalid login credentials' }), cfg, 'a@b', 'x'), /E-mail ou senha incorretos/);
+  await assert.rejects(entrar(resposta(400, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' }), cfg, 'a@b', 'x'), /E-mail ou senha incorretos/);
+  await assert.rejects(entrar(resposta(200, ok), cfg, '', 'x'), /Informe o e-mail/);
+
+  // renovar: recusa do servidor invalida a sessão; falta de rede não
+  const recusa = await renovar(resposta(400, { error_code: 'refresh_token_not_found', msg: 'Invalid Refresh Token' }), cfg, 'r1').catch((e) => e);
+  assert.equal(recusa.invalida, true);
+  const offline = await renovar(async () => { throw new TypeError('fetch failed'); }, cfg, 'r1').catch((e) => e);
+  assert.equal(offline.semConexao, true);
+  assert.equal(offline.invalida, false);
+  const fora = await renovar(resposta(503, {}), cfg, 'r1').catch((e) => e);
+  assert.equal(fora.semConexao, true);
+
+  // perfil: só os campos usados, cor validada
+  const p = await perfil(resposta(200, { user: { id: 7, username: 'ana', displayName: 'Ana Lima', avatarColor: '#2f6f5e' } }), cfg, 'a1');
+  assert.deepEqual(p, { id: 7, usuario: 'ana', nome: 'Ana Lima', cor: '#2f6f5e' });
+  const semCor = await perfil(resposta(200, { user: { id: 7, username: 'ana', avatarColor: 'red;background:url(x)' } }), cfg, 'a1');
+  assert.equal(semCor.cor, null);
+  assert.equal(semCor.nome, 'ana');
+  assert.equal(chamadas.at(-1).init.headers.authorization, 'Bearer a1');
+
+  chamadas.length = 0;
+  await sair(resposta(204), cfg, 'a1');
+  assert.match(chamadas[0].url, /\/auth\/v1\/logout\?scope=local$/);
 });
