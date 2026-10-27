@@ -265,7 +265,7 @@ function createWindow({ hidden = false } = {}) {
     show: false,
     title: 'Central HDL',
     icon: ICON,
-    backgroundColor: '#121722',
+    backgroundColor: '#07090E',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(HERE, 'preload.cjs'),
