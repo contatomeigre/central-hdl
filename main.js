@@ -4,7 +4,7 @@
 // no GitHub Releases, compara com o que está instalado no Windows e instala ou
 // atualiza em silêncio. Fica na bandeja e atualiza os apps sozinha.
 
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, net, Notification, safeStorage } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, net, Notification, safeStorage, clipboard } from 'electron';
 import updater from 'electron-updater';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { latestRelease, download, compareVersions } from './lib/releases.js';
 import { installedPrograms, findInstalled, isRunning, kill, runInstaller, runUninstall } from './lib/windows.js';
-import { entrar, renovar, sair, perfil } from './lib/conta.js';
+import { entrar, renovar, sair, perfil, cadastrar, rpc } from './lib/conta.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'icone.png');
@@ -52,19 +52,21 @@ function applyLoginItem(cfg) {
 
 // ------------------------------------------------------------ conta HDL
 // O mesmo Supabase do Prosa: quem tem conta no Prosa entra com o mesmo e-mail e senha.
-// A chave anon é pública por natureza; quem protege os dados são as regras do banco.
+// A chave publicável é pública por natureza; quem protege os dados são as regras do banco.
 const SUPABASE = {
   url: 'https://uydadfhfqfeapnktwsus.supabase.co',
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5ZGFkZmhmcWZlYXBua3R3c3VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4ODk2NTMsImV4cCI6MjEwODQ2NTY1M30.kbepru-9n2UQ6JVl5v7fmYA7pALDHnnM-NwT206mU_I',
+  chave: 'sb_publishable_ed1TW-T8r7Gx5cWkY89R4w_2nWGSk7g',
 };
 const CONTA_FILE = () => path.join(app.getPath('userData'), 'conta.bin');
 const RENOVAR_ANTES_MS = 5 * 60 * 1000;
 const TENTAR_DE_NOVO_MS = 60 * 1000;
+const VER_APROVACAO_MS = 30 * 1000;
 
 let sessao = null;          // { accessToken, refreshToken, expiraEm, email, perfil }
 let semConexao = false;     // entrou com a sessão salva sem conseguir falar com o servidor
 let renovando = null;       // uma renovação por vez: o Supabase derruba a sessão se o mesmo token for usado duas vezes
 let timerRenovar = null;
+let timerAprovacao = null;  // conta pendente: confere de tempos em tempos se já foi aprovada
 let contaCarregada = null;
 
 const estadoConta = () => (sessao ? { logado: true, semConexao, email: sessao.email, ...sessao.perfil } : { logado: false });
@@ -83,7 +85,14 @@ function mudarConta(nova, { offline = false } = {}) {
   semConexao = offline;
   guardarSessao();
   agendarRenovacao();
+  agendarAprovacao();
   send('conta', estadoConta());
+}
+
+function agendarAprovacao() {
+  clearTimeout(timerAprovacao);
+  if (sessao?.perfil?.situacao !== 'pendente') return;
+  timerAprovacao = setTimeout(() => atualizarPerfil().catch(agendarAprovacao), VER_APROVACAO_MS);
 }
 
 function agendarRenovacao(ms) {
@@ -142,6 +151,36 @@ async function entrarConta(email, senha) {
   mudarConta({ ...nova, perfil: p });
   return estadoConta();
 }
+
+/** Cria a conta com o convite; ela nasce pendente e a Central mostra a espera pela aprovação. */
+async function cadastrarConta(dados) {
+  const nova = await cadastrar(net.fetch, SUPABASE, dados ?? {});
+  mudarConta({ ...nova, perfil: await perfil(net.fetch, SUPABASE, nova.accessToken) });
+  return estadoConta();
+}
+
+/** Roda fn(token) com um token válido: renova antes se estiver vencendo e tenta de novo uma vez se o servidor recusar. */
+async function comToken(fn) {
+  if (!sessao) throw new Error('Entre com sua conta HDL.');
+  if (sessao.expiraEm - Date.now() < 60 * 1000) await renovarSessao();
+  try {
+    return await fn(sessao.accessToken);
+  } catch (err) {
+    if (err.status !== 401 || !sessao) throw err;
+    await renovarSessao();
+    return fn(sessao.accessToken);
+  }
+}
+
+/** Relê situação e papel (ex.: a conta pendente foi aprovada). */
+async function atualizarPerfil() {
+  if (!sessao) return estadoConta();
+  const p = await comToken((t) => perfil(net.fetch, SUPABASE, t));
+  if (sessao) mudarConta({ ...sessao, perfil: p });
+  return estadoConta();
+}
+
+const admin = (nome, args) => comToken((t) => rpc(net.fetch, SUPABASE, t, nome, args));
 
 async function sairConta() {
   const atual = sessao;
@@ -436,6 +475,21 @@ handle('reiniciar-central', () => restartToUpdate());
 handle('conta', () => carregarConta());
 handle('entrar', (email, senha) => entrarConta(String(email ?? ''), String(senha ?? '')));
 handle('sair-conta', () => sairConta());
+handle('cadastrar', (dados) => cadastrarConta({
+  email: String(dados?.email ?? ''), codigo: String(dados?.codigo ?? ''), usuario: String(dados?.usuario ?? ''),
+  nome: String(dados?.nome ?? ''), senha: String(dados?.senha ?? ''),
+}));
+handle('verificar-conta', () => atualizarPerfil());
+// administração: quem pode é conferido no banco (proprietário ou administrador da organização HDL)
+handle('pessoas', async () => {
+  const [pendentes, convites] = await Promise.all([admin('list_pending_accounts'), admin('list_account_invites')]);
+  return { pendentes: pendentes?.accounts ?? [], convites: convites?.invites ?? [] };
+});
+handle('convidar', (email, papel) => admin('create_account_invite', { p_email: String(email ?? ''), p_role: String(papel ?? 'member') }));
+handle('revogar-convite', (id) => admin('revoke_account_invite', { p_invite: Number(id) }));
+handle('aprovar', (id) => admin('approve_account', { p_user: Number(id) }));
+handle('recusar', (id) => admin('reject_account', { p_user: Number(id) }));
+handle('copiar', (texto) => clipboard.writeText(String(texto ?? '').slice(0, 4000)));
 
 // ------------------------------------------------------------ ciclo de vida
 app.on('second-instance', show);

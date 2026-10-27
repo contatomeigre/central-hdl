@@ -21,6 +21,15 @@ contextBridge.exposeInMainWorld('central', {
   conta: () => call('conta'),
   entrar: (email, senha) => call('entrar', email, senha),
   sair: () => call('sair-conta'),
+  cadastrar: (dados) => call('cadastrar', dados),
+  verificarConta: () => call('verificar-conta'),
+  /** Administração da Conta HDL (o banco confere se a pessoa é proprietária ou administradora). */
+  pessoas: () => call('pessoas'),
+  convidar: (email, papel) => call('convidar', email, papel),
+  revogarConvite: (id) => call('revogar-convite', id),
+  aprovar: (id) => call('aprovar', id),
+  recusar: (id) => call('recusar', id),
+  copiar: (texto) => call('copiar', texto),
   /** Eventos: estado, progresso, ocupado, central-status, conta. */
   on: (event, fn) => {
     if (!['estado', 'progresso', 'ocupado', 'central-status', 'conta'].includes(event)) return;

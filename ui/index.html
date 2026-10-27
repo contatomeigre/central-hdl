@@ -40,7 +40,7 @@
   </div>
 
   <!-- tela de entrada: aparece depois da tela de carregamento quando não há sessão -->
-  <section id="entrada" class="entrada" aria-labelledby="entrada-titulo" hidden>
+  <section id="entrada" class="entrada" aria-label="Conta HDL" hidden>
     <span class="boot-canto c1" aria-hidden="true"></span><span class="boot-canto c2" aria-hidden="true"></span>
     <span class="boot-canto c3" aria-hidden="true"></span><span class="boot-canto c4" aria-hidden="true"></span>
     <div class="boot-topo mono"><span>HDL // CONTA HDL</span><span id="entrada-versao"></span></div>
@@ -59,9 +59,42 @@
       <div class="entrada-ajuda">
         <button id="esqueci" class="link-btn" type="button" aria-expanded="false" aria-controls="esqueci-txt">Esqueci minha senha</button>
         <p id="esqueci-txt" hidden>Peça a um administrador da HDL para redefinir sua senha.</p>
-        <p>Sem conta? Peça um convite a um administrador da HDL.</p>
+        <p>Recebeu um convite? <button id="ir-cadastro" class="link-btn inline" type="button">Criar minha conta</button></p>
+        <p>Sem convite? Peça a um administrador da HDL.</p>
       </div>
     </form>
+
+    <form id="form-cadastro" class="entrada-caixa form-largo" novalidate hidden>
+      <div class="entrada-cab">
+        <span class="mono sobrancelha">// CONVITE</span>
+        <h1>Criar minha conta</h1>
+        <p>Use o e-mail e o código do convite que você recebeu. A conta vale para todos os aplicativos HDL.</p>
+      </div>
+      <div class="campos-2">
+        <label class="campo"><span>E-mail do convite</span><input id="cad-email" type="email" autocomplete="email" spellcheck="false" required></label>
+        <label class="campo"><span>Código do convite</span><input id="cad-codigo" class="mono" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" required></label>
+        <label class="campo"><span>Como quer ser chamado</span><input id="cad-nome" autocomplete="name" maxlength="64" required></label>
+        <label class="campo"><span>Nome de usuário</span><input id="cad-usuario" autocomplete="username" spellcheck="false" maxlength="32" placeholder="ex.: ana.lima" required></label>
+      </div>
+      <label class="campo"><span>Senha <small>(pelo menos 8 caracteres)</small></span><input id="cad-senha" type="password" autocomplete="new-password" minlength="8" required></label>
+      <p id="cad-erro" class="entrada-erro" role="alert" hidden></p>
+      <button id="cad-botao" class="btn" type="submit">Criar conta</button>
+      <div class="entrada-ajuda">
+        <p>O nome de usuário aparece nas menções do Prosa, como @ana. Depois de criada, a conta aguarda a aprovação de um administrador.</p>
+        <p>Já tem conta? <button id="ir-entrar" class="link-btn inline" type="button">Entrar</button></p>
+      </div>
+    </form>
+
+    <div id="painel-situacao" class="entrada-caixa" hidden>
+      <div id="situacao-icone" class="situacao-icone" aria-hidden="true"></div>
+      <div class="entrada-cab">
+        <span id="situacao-sobrancelha" class="mono sobrancelha"></span>
+        <h1 id="situacao-titulo"></h1>
+        <p id="situacao-texto"></p>
+      </div>
+      <button id="situacao-verificar" class="btn" type="button">Verificar agora</button>
+      <button id="situacao-sair" class="btn btn-sec" type="button">Sair desta conta</button>
+    </div>
 
     <div class="boot-rodape mono"><span>© HDL Soluções</span><span><i class="ponto"></i>conexão segura</span></div>
   </section>
@@ -86,6 +119,14 @@
         <button type="button" class="nav" data-filtro="atualizacoes">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>
           <span>Atualizações</span><small id="n-atualizacoes" class="selo mono" hidden></small>
+        </button>
+      </div>
+
+      <div id="secao-admin" class="secao" hidden>
+        <span class="rotulo mono">ADMINISTRAÇÃO</span>
+        <button type="button" class="nav" data-filtro="pessoas">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Pessoas</span><small id="n-pendentes" class="selo mono" hidden></small>
         </button>
       </div>
 
@@ -146,6 +187,21 @@
         <h2 class="mono rotulo">APLICATIVOS</h2>
         <div id="lista" class="grade" aria-live="polite"></div>
       </section>
+
+      <section id="pessoas" class="pessoas" aria-label="Pessoas" hidden>
+        <div class="pessoas-acoes">
+          <p>Convide pelo e-mail. A pessoa cria a conta na Central com o código do convite e fica aguardando até você aprovar.</p>
+          <button id="btn-convidar" class="btn" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Convidar pessoa
+          </button>
+        </div>
+        <p id="pessoas-erro" class="entrada-erro" role="alert" hidden></p>
+        <h2 class="mono rotulo">AGUARDANDO APROVAÇÃO</h2>
+        <div id="lista-pendentes" class="lista-pessoas"></div>
+        <h2 class="mono rotulo">CONVITES DOS ÚLTIMOS 30 DIAS</h2>
+        <div id="lista-convites" class="lista-pessoas"></div>
+      </section>
     </main>
   </div>
 
@@ -157,6 +213,31 @@
       <label class="alternador"><span><b>Iniciar com o Windows</b><small>A Central fica na bandeja e mantém tudo atualizado.</small></span><input type="checkbox" role="switch" id="cfg-login"></label>
       <div class="dlg-rodape"><button class="btn" value="ok">Fechar</button></div>
     </form>
+  </dialog>
+  <dialog id="dlg-convite" aria-labelledby="convite-titulo">
+    <form id="form-convite" novalidate>
+      <span class="mono sobrancelha">// CONVITE</span>
+      <h2 id="convite-titulo">Convidar pessoa</h2>
+      <p class="dlg-texto">O convite vale 7 dias e só pode ser usado uma vez, com este e-mail.</p>
+      <label class="campo"><span>E-mail</span><input id="convite-email" type="email" spellcheck="false" required></label>
+      <label class="campo"><span>Papel na HDL</span>
+        <select id="convite-papel">
+          <option value="member">Membro</option>
+          <option value="guest">Convidado (acesso limitado)</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </label>
+      <p id="convite-erro" class="entrada-erro" role="alert" hidden></p>
+      <div class="dlg-rodape"><button id="convite-cancelar" class="btn btn-sec" type="button">Cancelar</button><button id="convite-gerar" class="btn" type="submit">Gerar convite</button></div>
+    </form>
+    <div id="convite-pronto" hidden>
+      <span class="mono sobrancelha">// CONVITE CRIADO</span>
+      <h2>Envie para a pessoa</h2>
+      <p class="dlg-texto" id="convite-para"></p>
+      <div class="codigo mono" id="convite-codigo"></div>
+      <p class="dlg-texto aviso">O código não aparece de novo. Se perder, revogue e crie outro convite.</p>
+      <div class="dlg-rodape"><button id="convite-copiar" class="btn btn-sec" type="button">Copiar mensagem com o código</button><button id="convite-ok" class="btn" type="button">Concluir</button></div>
+    </div>
   </dialog>
   <div id="toasts" aria-live="polite"></div>
   <script type="module" src="app.js"></script>
