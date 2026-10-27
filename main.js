@@ -107,7 +107,7 @@ const setBusy = (id, status) => {
 };
 
 // ------------------------------------------------------------ instalar / atualizar / remover
-async function install(id, { fechar = false } = {}) {
+async function install(id, { fechar = false, segundoPlano = false } = {}) {
   if (busy.has(id)) throw new Error('Já existe uma operação em andamento para este app.');
   const a = await catalogEntry(id);
   const wasRunning = await isRunning(a.executavel);
@@ -120,7 +120,21 @@ async function install(id, { fechar = false } = {}) {
     await download(net.fetch, release, file, (got, total) => send('progresso', { id, got, total }));
     setBusy(id, 'instalando');
     if (await isRunning(a.executavel)) await kill(a.executavel);
-    await runInstaller(file);
+    try {
+      await runInstaller(file);
+    } catch (err) {
+      if (err.exitCode !== 2) throw err;
+      // Abortado pelo script: costuma ser arquivo ainda preso. Fecha de novo, espera e repete;
+      // se falhar outra vez e o usuário pediu, abre o instalador com telas para mostrar o motivo.
+      await kill(a.executavel);
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        await runInstaller(file);
+      } catch (again) {
+        if (segundoPlano || again.exitCode !== 2) throw again;
+        await runInstaller(file, { silent: false });
+      }
+    }
     if (wasRunning) launch(a).catch(() => {});
     return { versao: release.version };
   } finally {
@@ -171,7 +185,7 @@ async function backgroundCheck() {
       // apps abertos não são interrompidos: só avisa
       if (auto && !a.rodando && !busy.has(a.id)) {
         try {
-          const r = await install(a.id);
+          const r = await install(a.id, { segundoPlano: true });
           if (r.precisaFechar) continue; // foi aberto enquanto procurávamos
           notify(`${a.nome} atualizado`, `Versão ${r.versao} instalada.`);
         } catch (err) {
