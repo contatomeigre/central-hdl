@@ -14,6 +14,8 @@ Central HDL ── lê latest.yml de cada app ──► GitHub Releases (ex.: pr
 instala em silêncio (/S) e reabre o app, se ele estava aberto
 ```
 
+- **Abre com uma tela de carregamento** que mostra cada etapa de verdade (núcleo, catálogo e apps instalados, atualizações) num log de inicialização. Se o catálogo não carregar, a Central abre assim mesmo e avisa.
+- **Visual escuro de terminal**: barra lateral com Todos os apps, Instalados e Atualizações; apps com versão nova aparecem num painel de destaque com o progresso do download. Busca com `Ctrl K`. As fontes (Space Grotesk, JetBrains Mono e Inter, licença OFL) vão embutidas em `ui/fonts`, porque a política de segurança da janela não carrega nada de fora.
 - **Fica na bandeja** e inicia com o Windows (dá para desligar nas configurações).
 - A cada 30 min procura versões novas. Com "Atualizar apps automaticamente" ligado (o padrão), ela instala sozinha. **Apps abertos não são interrompidos**: a pessoa recebe uma notificação e atualiza quando quiser. Se o app estiver aberto, ele é fechado e reaberto.
 - Ela **se atualiza sozinha** pelo repositório `contatomeigre/central-hdl`: procura ao abrir e a cada 2 h, baixa em segundo plano e instala ao fechar. Ao lado da versão, no topo, o botão **Procurar atualização da Central** força a verificação e, com a versão nova baixada, vira **Reiniciar e atualizar**. "Procurar atualizações" e o menu da bandeja também verificam a Central.

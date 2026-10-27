@@ -3,35 +3,124 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://raw.githubusercontent.com https://github.com https://avatars.githubusercontent.com; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: https://raw.githubusercontent.com https://github.com https://avatars.githubusercontent.com; connect-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Central HDL</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="topo">
-    <div class="marca"><span class="marca-logo" aria-hidden="true">HDL</span><div><h1>Central HDL</h1><div class="central-versao"><small id="versao"></small><span id="central-status" class="central-status" aria-live="polite"></span><button id="central-atualizar" class="link-btn" type="button" hidden>Atualizar a Central</button></div></div></div>
-    <div class="busca"><input id="busca" type="search" placeholder="Buscar aplicativos" aria-label="Buscar aplicativos"></div>
-    <div class="topo-acoes">
-      <button id="verificar" class="btn btn-sec" type="button">Procurar atualizações</button>
-      <button id="atualizar-tudo" class="btn" type="button" hidden>Atualizar tudo</button>
-      <button id="abrir-config" class="icone-btn" type="button" title="Configurações" aria-label="Configurações">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .2-1.3-1.3L17 5l-3-1-1 2h-2L10 4 7 5l.3 2L6 8.2 4 8l-1 3 2 1-2 1 1 3 2-.2 1.3 1.3L7 19l3 1 1-2h2l1 2 3-1-.3-2 1.3-1.3 2 .3 1-3z"/></svg>
-      </button>
+  <!-- tela de carregamento: some quando o catálogo e os apps instalados terminam de carregar -->
+  <div id="boot" class="boot" role="status" aria-live="polite" aria-label="Inicializando a Central HDL">
+    <div class="boot-scan" aria-hidden="true"></div>
+    <span class="boot-canto c1" aria-hidden="true"></span><span class="boot-canto c2" aria-hidden="true"></span>
+    <span class="boot-canto c3" aria-hidden="true"></span><span class="boot-canto c4" aria-hidden="true"></span>
+    <div class="boot-topo mono"><span>HDL // CENTRAL DE APLICATIVOS</span><span id="boot-versao"></span></div>
+
+    <div class="boot-centro">
+      <div class="boot-anel" aria-hidden="true">
+        <svg class="gira-rev" viewBox="0 0 176 176"><circle cx="88" cy="88" r="85" fill="none" stroke="#2A3646" stroke-width="1.5" stroke-dasharray="2 7"/></svg>
+        <svg viewBox="0 0 176 176"><circle cx="88" cy="88" r="72" fill="none" stroke="#18212D" stroke-width="3"/></svg>
+        <svg class="gira" viewBox="0 0 176 176"><circle cx="88" cy="88" r="72" fill="none" stroke="#3DD6F5" stroke-width="3" stroke-linecap="round" stroke-dasharray="70 383"/><circle cx="88" cy="16" r="3.5" fill="#3DD6F5"/></svg>
+        <div class="logo logo-g"><span>HDL</span><i class="pulsa"></i></div>
+      </div>
+      <div class="boot-titulo">
+        <h1>Central HDL</h1>
+        <div class="mono boot-sub"><span id="boot-frase">inicializando ambiente</span><span class="cursor">_</span></div>
+      </div>
+      <div class="terminal">
+        <div class="terminal-cab mono"><i></i><i></i><i></i><span>boot.log</span></div>
+        <ol id="boot-log" class="terminal-corpo mono"></ol>
+      </div>
+      <div class="boot-progresso">
+        <div class="mono boot-linha"><span id="boot-etapa">INICIALIZANDO</span><b><span id="boot-pct">000</span><em>%</em></b></div>
+        <div id="boot-barra" class="segmentos" role="progressbar" aria-label="Progresso da inicialização" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+      </div>
     </div>
-  </header>
-  <div id="faixa-central" class="faixa" hidden></div>
-  <nav class="abas" role="tablist" aria-label="Filtro">
-    <button role="tab" data-filtro="todos" aria-selected="true">Todos</button>
-    <button role="tab" data-filtro="instalados" aria-selected="false">Instalados</button>
-    <button role="tab" data-filtro="atualizacoes" aria-selected="false">Atualizações <span id="n-atualizacoes" class="selo" hidden></span></button>
-  </nav>
-  <main id="lista" class="grade"><p class="vazio">Carregando catálogo…</p></main>
+
+    <div class="boot-rodape mono"><span>© HDL Soluções</span><span><i class="ponto pulsa"></i>repositório HDL</span></div>
+  </div>
+
+  <div class="casca">
+    <nav class="lateral" aria-label="Navegação principal">
+      <div class="marca">
+        <div class="logo logo-p"><span>HDL</span><i></i></div>
+        <div class="marca-txt"><b>Central HDL</b><small class="mono" id="marca-versao"></small></div>
+      </div>
+
+      <div class="secao">
+        <span class="rotulo mono">BIBLIOTECA</span>
+        <button type="button" class="nav" data-filtro="todos" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          <span>Todos os apps</span><small id="n-todos" class="mono"></small>
+        </button>
+        <button type="button" class="nav" data-filtro="instalados">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          <span>Instalados</span><small id="n-instalados" class="mono"></small>
+        </button>
+        <button type="button" class="nav" data-filtro="atualizacoes">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>
+          <span>Atualizações</span><small id="n-atualizacoes" class="selo mono" hidden></small>
+        </button>
+      </div>
+
+      <div class="lateral-fim">
+        <div class="central-card">
+          <div class="mono central-cab"><i id="central-ponto" class="ponto pulsa"></i><span id="central-rotulo">CENTRAL</span></div>
+          <span id="central-status" class="central-status" aria-live="polite"></span>
+          <button id="central-atualizar" class="link-btn" type="button" hidden>Procurar atualização da Central</button>
+        </div>
+        <button id="abrir-config" type="button" class="nav">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Configurações</span>
+        </button>
+      </div>
+    </nav>
+
+    <main class="principal">
+      <div id="faixa-central" class="faixa" hidden></div>
+
+      <div class="ferramentas">
+        <label class="busca">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="busca" type="search" placeholder="Buscar aplicativos, categorias…" aria-label="Buscar aplicativos">
+          <kbd class="mono">Ctrl K</kbd>
+        </label>
+        <button id="verificar" class="btn btn-sec" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>
+          Procurar atualizações
+        </button>
+        <button id="atualizar-tudo" class="btn" type="button" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M5 20h14"/></svg>
+          <span>Atualizar tudo</span>
+        </button>
+        <button id="tudo-em-dia" class="btn btn-ok" type="button" disabled hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+          Tudo atualizado
+        </button>
+      </div>
+
+      <header class="cabecalho">
+        <div>
+          <span id="sobrancelha" class="mono sobrancelha">// CATÁLOGO HDL</span>
+          <h1 id="titulo">Todos os aplicativos</h1>
+        </div>
+        <div class="chips mono"><span id="chip-instalados"></span><span id="chip-atualizacoes"></span></div>
+      </header>
+
+      <div id="destaques" class="destaques"></div>
+
+      <section id="biblioteca" class="biblioteca" aria-label="Aplicativos">
+        <h2 class="mono rotulo">APLICATIVOS</h2>
+        <div id="lista" class="grade"></div>
+      </section>
+    </main>
+  </div>
 
   <dialog id="config">
     <form method="dialog">
+      <span class="mono sobrancelha">// PREFERÊNCIAS</span>
       <h2>Configurações</h2>
-      <label class="alternador"><span><b>Atualizar apps automaticamente</b><small>Instala novas versões em segundo plano. Apps abertos não são interrompidos: você recebe um aviso.</small></span><input type="checkbox" id="cfg-auto"></label>
-      <label class="alternador"><span><b>Iniciar com o Windows</b><small>A Central fica na bandeja e mantém tudo atualizado.</small></span><input type="checkbox" id="cfg-login"></label>
+      <label class="alternador"><span><b>Atualizar apps automaticamente</b><small>Instala novas versões em segundo plano. Apps abertos não são interrompidos: você recebe um aviso.</small></span><input type="checkbox" role="switch" id="cfg-auto"></label>
+      <label class="alternador"><span><b>Iniciar com o Windows</b><small>A Central fica na bandeja e mantém tudo atualizado.</small></span><input type="checkbox" role="switch" id="cfg-login"></label>
       <div class="dlg-rodape"><button id="abrir-registros" class="link-btn" type="button">Abrir pasta de registros</button><button class="btn" value="ok">Fechar</button></div>
     </form>
   </dialog>
