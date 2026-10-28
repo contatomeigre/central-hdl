@@ -20,6 +20,18 @@
       "executavel": "Fluxo.exe",
       "icone": "https://raw.githubusercontent.com/hdldev123/central-hdl/main/icones/fluxo.png",
       "tag": "fluxo"
+    },
+    {
+      "id": "financeiro",
+      "nome": "Financeiro HDL",
+      "descricao": "ERP da empresa: finanças, vendas e NF-e, estoque e produção, serviços, CRM e painel do contador.",
+      "categoria": "Financeiro",
+      "repo": "hdldev123/financeiro-hdl-releases",
+      "nomeWindows": "Financeiro HDL",
+      "executavel": "Financeiro HDL.exe",
+      "icone": "https://raw.githubusercontent.com/hdldev123/central-hdl/main/icones/financeiro.png",
+      "cor": "#22d3ee",
+      "tag": "financeiro"
     }
   ]
 }
