@@ -85,7 +85,7 @@ function botoes(a, { grande = false } = {}) {
   const lista = [];
   if (!a.instalada && a.ultima) lista.push(h('button', { type: 'button', class: `btn${p}`, onclick: () => instalar(a) }, 'Instalar'));
   if (a.atualizacao) lista.push(h('button', { type: 'button', class: `btn${p}`, onclick: () => instalar(a) }, 'Atualizar'));
-  if (a.instalada) lista.push(h('button', { type: 'button', class: `btn${p}${a.atualizacao ? ' btn-sec' : ''}`, onclick: () => executar(() => api.abrir(a.id)) }, 'Abrir'));
+  if (a.instalada) lista.push(h('button', { type: 'button', class: `btn${p}${a.atualizacao ? ' btn-sec' : ''}`, onclick: () => abrir(a) }, 'Abrir'));
   if (a.instalada) lista.push(h('button', { type: 'button', class: 'icone-btn', title: 'Desinstalar', 'aria-label': `Desinstalar ${a.nome}`, onclick: () => desinstalar(a) }, ICONE.lixeira()));
   return h('div', { class: 'botoes' }, lista);
 }
@@ -242,6 +242,7 @@ api.on('ocupado', ({ id, status }) => {
   const a = apps.find((x) => x.id === id);
   if (a) { a.ocupado = status; render(); }
 });
+api.on('abrindo', ({ id, etapa }) => telasAbertura.get(id)?.etapa(etapa));
 api.on('central-status', mostrarStatusCentral);
 
 // ------------------------------------------------------------ atualização da própria Central
@@ -323,6 +324,163 @@ for (const id of ['cfg-auto', 'cfg-login']) {
   $(id).addEventListener('change', () => executar(() => api.salvarConfig({ atualizarSozinho: $('cfg-auto').checked, iniciarComWindows: $('cfg-login').checked })));
 }
 
+// ------------------------------------------------------------ barra de progresso segmentada
+/**
+ * Barra que avança sozinha: corre até `alvo` e, sem alvo novo, rasteja até `teto`
+ * (`ritmo` em ms dita a lentidão). Quem a usa só move alvo e teto conforme as etapas reais.
+ */
+function medidor(barra, segmentos, aoMudar) {
+  const segs = Array.from({ length: segmentos }, () => h('i'));
+  barra.replaceChildren(...segs);
+  const m = { pct: 0, alvo: 0, teto: 0, ritmo: 900 };
+  let antes = performance.now();
+  // avança pelo tempo decorrido (e não por quadro), para não depender da taxa de quadros
+  const relogio = setInterval(() => {
+    const agora = performance.now();
+    const dt = Math.min(200, agora - antes);
+    antes = agora;
+    if (m.pct < m.alvo) m.pct = Math.min(m.alvo, m.pct + Math.max(dt * 0.12, (m.alvo - m.pct) * (1 - Math.exp(-dt / 90))));
+    else if (m.pct < m.teto) m.pct = Math.min(m.teto, m.pct + (m.teto - m.pct) * (1 - Math.exp(-dt / m.ritmo)));
+    const n = Math.round(m.pct);
+    barra.setAttribute('aria-valuenow', String(n));
+    aoMudar(n);
+    const ligados = Math.round(m.pct / (100 / segmentos));
+    segs.forEach((s, i) => s.classList.toggle('on', i < ligados));
+  }, 30);
+  m.parar = () => clearInterval(relogio);
+  return m;
+}
+const pct3 = (n) => String(n).padStart(3, '0');
+
+// ------------------------------------------------------------ tela de abertura de app
+// Modelo único para todos os apps do catálogo: nome, ícone, versão, executável e a
+// cor opcional (`cor` no catalogo.json) vêm da entrada do app. As etapas são reais e
+// chegam do processo principal pelo evento "abrindo".
+const ETAPAS_ABERTURA = {
+  verificando: { texto: () => 'Verificando a instalação', ate: 20 },
+  iniciando: { texto: (a) => `Iniciando ${a.executavel ?? a.nome}`, ate: 45 },
+  aguardando: { texto: (a) => `Aguardando a janela do ${a.nome}`, ate: 100, ritmo: 4000 },
+};
+const telasAbertura = new Map(); // id -> tela aberta
+
+function anelAbertura() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  };
+  const fundo = el('svg', { viewBox: '0 0 120 120', 'aria-hidden': 'true' });
+  fundo.append(el('circle', { cx: 60, cy: 60, r: 57, class: 'orbita' }), el('circle', { cx: 60, cy: 60, r: 50, class: 'trilho' }));
+  const giro = el('svg', { viewBox: '0 0 120 120', class: 'giro', 'aria-hidden': 'true' });
+  giro.append(el('circle', { cx: 60, cy: 60, r: 50, class: 'arco', transform: 'rotate(-90 60 60)' }), el('circle', { cx: 60, cy: 10, r: 3, class: 'satelite' }));
+  return [fundo, giro];
+}
+
+function telaAbertura(a) {
+  const tituloId = `abertura-${a.id}`;
+  const titulo = h('h2', { id: tituloId }, `Abrindo ${a.nome}`);
+  const rotulo = h('span', { 'aria-live': 'polite' }, 'PREPARANDO');
+  const pct = h('span', {}, '000');
+  const barra = h('div', {
+    class: 'segmentos', role: 'progressbar', 'aria-label': `Abrindo ${a.nome}`, 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0',
+  });
+  const etapas = h('ol', { class: 'abertura-etapas mono' });
+  const rodape = h('div', { class: 'abertura-rodape' });
+  const raiz = h('div', { class: 'abertura', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': tituloId, tabindex: '-1' },
+    h('div', { class: 'abertura-caixa' },
+      ['c1', 'c2', 'c3', 'c4'].map((c) => h('span', { class: `abertura-canto ${c}`, 'aria-hidden': 'true' })),
+      h('div', { class: 'abertura-topo mono' }, h('span', {}, 'HDL // INICIAR APLICATIVO'), a.instalada ? h('span', {}, `v${a.instalada}`) : null),
+      h('div', { class: 'abertura-anel' }, anelAbertura(), iconeApp(a, true)),
+      h('div', { class: 'abertura-titulo' }, titulo, h('small', { class: 'mono' }, [a.categoria, a.executavel].filter(Boolean).join(' · '))),
+      etapas,
+      h('div', { class: 'abertura-progresso' },
+        h('div', { class: 'mono boot-linha' }, rotulo, h('b', {}, pct, h('em', {}, '%'))),
+        barra),
+      rodape));
+  if (a.cor) raiz.style.setProperty('--acento', a.cor);
+  const focoAntes = document.activeElement;
+  document.body.append(raiz);
+  raiz.focus();
+  const m = medidor(barra, 24, (n) => { pct.textContent = pct3(n); });
+
+  let atual = null; // etapa em andamento: { res, ate }
+  const fecharEtapa = (texto, tipo = '') => {
+    if (!atual) return;
+    atual.res.className = `res ${tipo}`;
+    atual.res.textContent = texto;
+    if (tipo !== 'falha') m.alvo = atual.ate;
+    atual = null;
+  };
+  // com o app já aberto as etapas chegam quase juntas: a fila segura cada uma por um
+  // instante para a tela não piscar
+  let fila = Promise.resolve();
+  const passo = (fn) => (fila = fila.then(fn));
+  const esc = (e) => { if (e.key === 'Escape') fechar(); };
+
+  function fechar() {
+    m.parar();
+    document.removeEventListener('keydown', esc);
+    telasAbertura.delete(a.id);
+    raiz.classList.add('saindo');
+    raiz.addEventListener('transitionend', () => raiz.remove(), { once: true });
+    setTimeout(() => raiz.remove(), 500);
+    if (focoAntes?.isConnected) focoAntes.focus();
+  }
+
+  return {
+    etapa: (nome) => passo(async () => {
+      const def = ETAPAS_ABERTURA[nome];
+      if (!def) return;
+      fecharEtapa('OK');
+      const texto = def.texto(a);
+      const res = h('span', { class: 'res rodando' }, '…');
+      etapas.append(h('li', {}, h('span', { class: 'seta' }, '›'), h('span', { class: 'txt' }, texto), res));
+      rotulo.textContent = texto.toUpperCase();
+      atual = { res, ate: def.ate };
+      m.teto = def.ate - 4;
+      m.ritmo = def.ritmo ?? 900;
+      await espera(ETAPA_MIN_MS);
+    }),
+    /** `janela` false: o app iniciou, mas não mostrou janela no prazo (bandeja ou lentidão). */
+    concluir: (janela) => passo(async () => {
+      fecharEtapa(janela ? 'OK' : 'SEGUNDO PLANO', janela ? '' : 'aviso');
+      m.alvo = 100;
+      while (m.pct < 100 && !document.hidden) await espera(30);
+      raiz.classList.add('pronta');
+      titulo.textContent = janela ? `${a.nome} aberto` : `${a.nome} iniciado`;
+      rotulo.textContent = janela ? 'TUDO PRONTO' : 'ABERTO EM SEGUNDO PLANO';
+      await espera(janela ? 600 : 1400);
+      fechar();
+    }),
+    falhar: (msg) => passo(async () => {
+      fecharEtapa('FALHOU', 'falha');
+      m.teto = m.pct;
+      raiz.classList.add('falhou');
+      titulo.textContent = `Não foi possível abrir o ${a.nome}`;
+      rotulo.textContent = 'FALHA AO INICIAR';
+      const ok = h('button', { type: 'button', class: 'btn btn-sec', onclick: fechar }, 'Fechar');
+      rodape.replaceChildren(h('p', { class: 'abertura-erro', role: 'alert' }, msg), ok);
+      document.addEventListener('keydown', esc);
+      ok.focus();
+    }),
+  };
+}
+
+async function abrir(a) {
+  if (telasAbertura.has(a.id)) return;
+  const tela = telaAbertura(a);
+  telasAbertura.set(a.id, tela);
+  try {
+    const r = await api.abrir(a.id);
+    await tela.concluir(r?.janela !== false);
+    const atual = apps.find((x) => x.id === a.id);
+    if (atual && !atual.rodando) { atual.rodando = true; render(); }
+  } catch (err) {
+    await tela.falhar(err.message);
+  }
+}
+
 // ------------------------------------------------------------ tela de carregamento
 // Cada etapa é uma chamada real; a barra avança devagar enquanto ela roda e
 // salta para o fim da faixa da etapa quando ela termina.
@@ -331,28 +489,7 @@ const ETAPA_MIN_MS = 260; // evita que a tela pisque quando tudo responde rápid
 
 async function carregar() {
   const inicio = performance.now();
-  const barra = $('boot-barra');
-  const segs = Array.from({ length: SEGMENTOS }, () => h('i'));
-  barra.replaceChildren(...segs);
-  let pct = 0;
-  let alvo = 0;
-  let teto = 0;
-  let antes = performance.now();
-
-  // avança pelo tempo decorrido (e não por quadro), para não depender da taxa de quadros
-  const relogio = setInterval(() => {
-    const agora = performance.now();
-    const dt = Math.min(200, agora - antes);
-    antes = agora;
-    // aproxima do alvo; sem alvo novo, rasteja até o teto da etapa
-    if (pct < alvo) pct = Math.min(alvo, pct + Math.max(dt * 0.12, (alvo - pct) * (1 - Math.exp(-dt / 90))));
-    else if (pct < teto) pct = Math.min(teto, pct + (teto - pct) * (1 - Math.exp(-dt / 900)));
-    const n = Math.round(pct);
-    $('boot-pct').textContent = String(n).padStart(3, '0');
-    barra.setAttribute('aria-valuenow', String(n));
-    const ligados = Math.round(pct / (100 / SEGMENTOS));
-    segs.forEach((s, i) => s.classList.toggle('on', i < ligados));
-  }, 30);
+  const m = medidor($('boot-barra'), SEGMENTOS, (n) => { $('boot-pct').textContent = pct3(n); });
 
   const tempo = () => `[${((performance.now() - inicio) / 1000).toFixed(2)}s]`;
   const log = $('boot-log');
@@ -360,7 +497,7 @@ async function carregar() {
     const res = h('span', { class: 'res rodando' }, '…');
     log.append(h('li', {}, h('span', { class: 'ts' }, tempo()), h('span', { class: 'seta' }, '›'), h('span', { class: 'txt' }, texto), res));
     $('boot-etapa').textContent = texto.toUpperCase();
-    teto = ate - 2;
+    m.teto = ate - 2;
     const t0 = performance.now();
     let saida;
     try {
@@ -372,7 +509,7 @@ async function carregar() {
     if (resto > 0) await espera(resto);
     res.className = `res ${saida?.tipo ?? ''}`;
     res.textContent = saida?.texto ?? 'OK';
-    alvo = ate;
+    m.alvo = ate;
     return saida;
   }
 
@@ -400,9 +537,9 @@ async function carregar() {
   $('boot-etapa').textContent = carregado?.tipo === 'falha' ? 'ABRINDO A CENTRAL SEM O CATÁLOGO' : 'TUDO PRONTO · ABRINDO A CENTRAL';
   $('boot-frase').textContent = 'ambiente pronto';
   // janela aberta oculta (na bandeja): os temporizadores ficam lentos, então fecha direto
-  while (pct < 100 && !document.hidden) await espera(30);
+  while (m.pct < 100 && !document.hidden) await espera(30);
   await espera(450);
-  clearInterval(relogio);
+  m.parar();
   const boot = $('boot');
   boot.classList.add('saindo');
   boot.addEventListener('transitionend', () => boot.remove(), { once: true });

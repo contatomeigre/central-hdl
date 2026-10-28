@@ -17,9 +17,9 @@ contextBridge.exposeInMainWorld('central', {
   info: () => call('central'),
   verificarCentral: () => call('verificar-central'),
   reiniciar: () => call('reiniciar-central'),
-  /** Eventos: estado, progresso, ocupado, central-status. */
+  /** Eventos: estado, progresso, ocupado, abrindo, central-status. */
   on: (event, fn) => {
-    if (!['estado', 'progresso', 'ocupado', 'central-status'].includes(event)) return;
+    if (!['estado', 'progresso', 'ocupado', 'abrindo', 'central-status'].includes(event)) return;
     ipcRenderer.on(event, (_e, payload) => fn(payload));
   },
 });

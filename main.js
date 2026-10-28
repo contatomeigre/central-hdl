@@ -11,12 +11,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { latestRelease, download, compareVersions } from './lib/releases.js';
-import { installedPrograms, findInstalled, isRunning, kill, runInstaller, runUninstall } from './lib/windows.js';
+import { installedPrograms, findInstalled, isRunning, hasWindow, kill, runInstaller, runUninstall } from './lib/windows.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'icone.png');
 const CATALOG_URL = 'https://raw.githubusercontent.com/contatomeigre/central-hdl/main/catalogo.json';
 const CHECK_EVERY_MS = 30 * 60 * 1000;
+const WINDOW_WAIT_MS = 20 * 1000; // ao abrir um app, quanto esperar pela janela dele
 const HIDDEN_ARG = '--oculto';
 
 app.setName('Central HDL');
@@ -83,6 +84,9 @@ async function collectState() {
       descricao: a.descricao ?? '',
       categoria: a.categoria ?? 'Outros',
       icone: a.icone ?? null,
+      executavel: a.executavel,
+      // cor de destaque da tela de abertura; só aceita #rrggbb
+      cor: /^#[0-9a-f]{6}$/i.test(a.cor ?? '') ? a.cor : null,
       instalada: installed,
       ultima: latest ? { versao: latest.version, data: latest.releaseDate, tamanho: latest.size, notas: latest.notesUrl } : null,
       atualizacao: Boolean(installed && latest && compareVersions(latest.version, installed) > 0),
@@ -149,12 +153,26 @@ async function installedEntry(a) {
   return inst;
 }
 
-async function launch(a) {
+/**
+ * Abre o app e espera a janela dele aparecer. `etapa` recebe cada passo
+ * (verificando, iniciando, aguardando) para a tela de abertura mostrar.
+ * Sem janela no prazo (app que abre na bandeja ou demorou), resolve com { janela: false }.
+ */
+async function launch(a, etapa = () => {}) {
+  etapa('verificando');
   const inst = await installedEntry(a);
   const exe = path.join(inst.location ?? path.join(process.env.LOCALAPPDATA ?? '', 'Programs', a.nome), a.executavel);
   if (!fs.existsSync(exe)) throw new Error(`Não encontrei ${a.executavel}. Reinstale o app.`);
+  etapa('iniciando');
   const err = await shell.openPath(exe);
   if (err) throw new Error(err);
+  etapa('aguardando');
+  const limite = Date.now() + WINDOW_WAIT_MS;
+  while (Date.now() < limite) {
+    if (await hasWindow(a.executavel)) return { janela: true };
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return { janela: false };
 }
 
 async function uninstall(id) {
@@ -318,7 +336,10 @@ const handle = (channel, fn) => ipcMain.handle(channel, async (_e, ...args) => {
 });
 handle('estado', () => collectState());
 handle('instalar', (id, opts) => install(String(id), opts ?? {}));
-handle('abrir', async (id) => launch(await catalogEntry(String(id))));
+handle('abrir', async (id) => {
+  const a = await catalogEntry(String(id));
+  return launch(a, (etapa) => send('abrindo', { id: a.id, etapa }));
+});
 handle('desinstalar', (id) => uninstall(String(id)));
 handle('config', () => readConfig());
 handle('salvar-config', (cfg) => writeConfig({
