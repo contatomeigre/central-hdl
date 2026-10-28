@@ -4,7 +4,7 @@
 // no GitHub Releases, compara com o que está instalado no Windows e instala ou
 // atualiza em silêncio. Fica na bandeja e atualiza os apps sozinha.
 
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, net, Notification } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, net, Notification, safeStorage, clipboard } from 'electron';
 import updater from 'electron-updater';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -14,6 +14,7 @@ import { latestRelease, download, compareVersions } from './lib/releases.js';
 import { installedPrograms, findInstalled, isRunning, kill, runInstaller, runUninstall } from './lib/windows.js';
 import { validateCatalog } from './lib/catalog.js';
 import { createLog } from './lib/log.js';
+import { entrar, renovar, sair, perfil, cadastrar, rpc } from './lib/conta.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'icone.png');
@@ -55,6 +56,160 @@ function writeConfig(next) {
 function applyLoginItem(cfg) {
   if (!app.isPackaged) return;
   app.setLoginItemSettings({ openAtLogin: cfg.iniciarComWindows, args: [HIDDEN_ARG] });
+}
+
+// ------------------------------------------------------------ conta HDL
+// O mesmo Supabase do Prosa: quem tem conta no Prosa entra com o mesmo e-mail e senha.
+// A chave publicável é pública por natureza; quem protege os dados são as regras do banco.
+const SUPABASE = {
+  url: 'https://uydadfhfqfeapnktwsus.supabase.co',
+  chave: 'sb_publishable_ed1TW-T8r7Gx5cWkY89R4w_2nWGSk7g',
+};
+const CONTA_FILE = () => path.join(app.getPath('userData'), 'conta.bin');
+const RENOVAR_ANTES_MS = 5 * 60 * 1000;
+const TENTAR_DE_NOVO_MS = 60 * 1000;
+const VER_APROVACAO_MS = 30 * 1000;
+
+let sessao = null;          // { accessToken, refreshToken, expiraEm, email, perfil }
+let semConexao = false;     // entrou com a sessão salva sem conseguir falar com o servidor
+let renovando = null;       // uma renovação por vez: o Supabase derruba a sessão se o mesmo token for usado duas vezes
+let timerRenovar = null;
+let timerAprovacao = null;  // conta pendente: confere de tempos em tempos se já foi aprovada
+let contaCarregada = null;
+
+const estadoConta = () => (sessao ? { logado: true, semConexao, email: sessao.email, ...sessao.perfil } : { logado: false });
+
+// gravada criptografada pelo Windows (DPAPI); sem isso, a sessão vale só até fechar a Central
+function guardarSessao() {
+  if (!sessao) return fs.rmSync(CONTA_FILE(), { force: true });
+  if (safeStorage.isEncryptionAvailable()) fs.writeFileSync(CONTA_FILE(), safeStorage.encryptString(JSON.stringify(sessao)));
+}
+function lerSessao() {
+  try { return JSON.parse(safeStorage.decryptString(fs.readFileSync(CONTA_FILE()))); } catch { return null; }
+}
+
+function mudarConta(nova, { offline = false } = {}) {
+  sessao = nova;
+  semConexao = offline;
+  guardarSessao();
+  agendarRenovacao();
+  agendarAprovacao();
+  send('conta', estadoConta());
+}
+
+function agendarAprovacao() {
+  clearTimeout(timerAprovacao);
+  if (sessao?.perfil?.situacao !== 'pendente') return;
+  timerAprovacao = setTimeout(() => atualizarPerfil().catch(agendarAprovacao), VER_APROVACAO_MS);
+}
+
+function agendarRenovacao(ms) {
+  clearTimeout(timerRenovar);
+  if (!sessao) return;
+  timerRenovar = setTimeout(() => renovarSessao().catch(() => {}), ms ?? Math.max(30 * 1000, sessao.expiraEm - Date.now() - RENOVAR_ANTES_MS));
+}
+
+/** Renova a sessão. Sem internet, mantém a salva e tenta de novo em 1 min; recusada, sai da conta. */
+function renovarSessao() {
+  renovando ??= (async () => {
+    const atual = sessao;
+    try {
+      const nova = await renovar(net.fetch, SUPABASE, atual.refreshToken);
+      const p = await perfil(net.fetch, SUPABASE, nova.accessToken).catch(() => atual.perfil);
+      if (sessao === atual) mudarConta({ ...nova, email: nova.email ?? atual.email, perfil: p });
+    } catch (err) {
+      if (sessao !== atual) return; // saiu da conta enquanto renovava
+      if (err.invalida) {
+        log.warn(`conta: sessão de ${atual.perfil?.usuario ?? '?'} recusada pelo servidor (${err.message}); voltou para a tela de login`);
+        mudarConta(null);
+      } else {
+        semConexao = true;
+        send('conta', estadoConta());
+        agendarRenovacao(TENTAR_DE_NOVO_MS);
+      }
+      throw err;
+    } finally {
+      renovando = null;
+    }
+  })();
+  return renovando;
+}
+
+/** Na abertura: recupera a sessão salva e confere com o servidor (sem internet, entra com ela mesmo assim). */
+function carregarConta() {
+  contaCarregada ??= (async () => {
+    const salva = lerSessao();
+    if (!salva?.refreshToken || !salva.perfil) return estadoConta();
+    sessao = salva;
+    await renovarSessao().catch(() => {});
+    return estadoConta();
+  })();
+  return contaCarregada;
+}
+
+async function entrarConta(email, senha) {
+  const nova = await entrar(net.fetch, SUPABASE, email, senha);
+  let p;
+  try {
+    p = await perfil(net.fetch, SUPABASE, nova.accessToken);
+  } catch (err) {
+    await sair(net.fetch, SUPABASE, nova.accessToken).catch(() => {});
+    throw err;
+  }
+  log.info(`conta: ${p.usuario} entrou (${p.situacao}${p.admin ? ', administrador' : ''})`);
+  mudarConta({ ...nova, perfil: p });
+  return estadoConta();
+}
+
+/** Cria a conta com o convite; ela nasce pendente e a Central mostra a espera pela aprovação. */
+async function cadastrarConta(dados) {
+  const nova = await cadastrar(net.fetch, SUPABASE, dados ?? {});
+  const p = await perfil(net.fetch, SUPABASE, nova.accessToken);
+  log.info(`conta: ${p.usuario} criou a conta com convite (${p.situacao})`);
+  mudarConta({ ...nova, perfil: p });
+  return estadoConta();
+}
+
+/** Roda fn(token) com um token válido: renova antes se estiver vencendo e tenta de novo uma vez se o servidor recusar. */
+async function comToken(fn) {
+  if (!sessao) throw new Error('Entre com sua conta HDL.');
+  if (sessao.expiraEm - Date.now() < 60 * 1000) await renovarSessao();
+  try {
+    return await fn(sessao.accessToken);
+  } catch (err) {
+    if (err.status !== 401 || !sessao) throw err;
+    await renovarSessao();
+    return fn(sessao.accessToken);
+  }
+}
+
+/** Relê situação e papel (ex.: a conta pendente foi aprovada). */
+async function atualizarPerfil() {
+  if (!sessao) return estadoConta();
+  const p = await comToken((t) => perfil(net.fetch, SUPABASE, t));
+  if (sessao?.perfil?.situacao && sessao.perfil.situacao !== p.situacao) log.info(`conta: ${p.usuario} passou de ${sessao.perfil.situacao} para ${p.situacao}`);
+  if (sessao) mudarConta({ ...sessao, perfil: p });
+  return estadoConta();
+}
+
+const admin = (nome, args) => comToken((t) => rpc(net.fetch, SUPABASE, t, nome, args));
+/** Ação de administração que muda algo: fica no registro (só ids e papel, sem e-mails). */
+async function acaoAdmin(nome, args, resumo) {
+  const r = await admin(nome, args);
+  log.info(`administração: ${sessao?.perfil?.usuario ?? '?'} ${resumo}`);
+  return r;
+}
+
+async function sairConta() {
+  const atual = sessao;
+  mudarConta(null);
+  if (!atual) return estadoConta();
+  log.info(`conta: ${atual.perfil?.usuario ?? '?'} saiu`);
+  // com o token vencido o servidor recusaria o logout: renova antes só para encerrar a sessão de vez
+  let token = atual.accessToken;
+  if (atual.expiraEm - Date.now() < 30 * 1000) token = (await renovar(net.fetch, SUPABASE, atual.refreshToken).catch(() => null))?.accessToken;
+  if (token) await sair(net.fetch, SUPABASE, token).catch(() => {}); // sem internet: o servidor descarta quando vencer
+  return estadoConta();
 }
 
 // ------------------------------------------------------------ catálogo
@@ -383,6 +538,24 @@ handle('abrir-registros', async () => {
   const err = await shell.openPath(log.pasta());
   if (err) throw new Error(err);
 });
+handle('conta', () => carregarConta());
+handle('entrar', (email, senha) => entrarConta(String(email ?? ''), String(senha ?? '')));
+handle('sair-conta', () => sairConta());
+handle('cadastrar', (dados) => cadastrarConta({
+  email: String(dados?.email ?? ''), codigo: String(dados?.codigo ?? ''), usuario: String(dados?.usuario ?? ''),
+  nome: String(dados?.nome ?? ''), senha: String(dados?.senha ?? ''),
+}));
+handle('verificar-conta', () => atualizarPerfil());
+// administração: quem pode é conferido no banco (proprietário ou administrador da organização HDL)
+handle('pessoas', async () => {
+  const [pendentes, convites] = await Promise.all([admin('list_pending_accounts'), admin('list_account_invites')]);
+  return { pendentes: pendentes?.accounts ?? [], convites: convites?.invites ?? [] };
+});
+handle('convidar', (email, papel) => acaoAdmin('create_account_invite', { p_email: String(email ?? ''), p_role: String(papel ?? 'member') }, `criou um convite (${papel})`));
+handle('revogar-convite', (id) => acaoAdmin('revoke_account_invite', { p_invite: Number(id) }, `revogou o convite ${id}`));
+handle('aprovar', (id) => acaoAdmin('approve_account', { p_user: Number(id) }, `aprovou a conta ${id}`));
+handle('recusar', (id) => acaoAdmin('reject_account', { p_user: Number(id) }, `recusou a conta ${id}`));
+handle('copiar', (texto) => clipboard.writeText(String(texto ?? '').slice(0, 4000)));
 
 // ------------------------------------------------------------ ciclo de vida
 app.on('second-instance', show);

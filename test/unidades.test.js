@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseLatestYml, compareVersions, download, latestRelease } from '../lib/releases.js';
 import { parseRegistry, findInstalled, folderOf } from '../lib/windows.js';
+import { entrar, renovar, perfil, sair, cadastrar } from '../lib/conta.js';
 import { validateCatalog } from '../lib/catalog.js';
 import { createLog } from '../lib/log.js';
 
@@ -82,6 +83,86 @@ test('download confere o SHA-512 e apaga arquivo adulterado', async () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('conta HDL: entrar, renovar, perfil e mensagens de erro', async () => {
+  const cfg = { url: 'https://exemplo.supabase.co', chave: 'anon' };
+  const chamadas = [];
+  const resposta = (status, corpo) => async (url, init) => {
+    chamadas.push({ url, init });
+    return new Response(corpo === undefined ? null : JSON.stringify(corpo), { status });
+  };
+
+  const ok = { access_token: 'a1', refresh_token: 'r1', expires_at: 2000000000, user: { email: 'ana@hdl.com' } };
+  const s = await entrar(resposta(200, ok), cfg, ' ana@hdl.com ', 'segredo');
+  assert.deepEqual(s, { accessToken: 'a1', refreshToken: 'r1', expiraEm: 2000000000000, email: 'ana@hdl.com' });
+  assert.match(chamadas[0].url, /\/auth\/v1\/token\?grant_type=password$/);
+  assert.equal(chamadas[0].init.headers.apikey, 'anon');
+  assert.deepEqual(JSON.parse(chamadas[0].init.body), { email: 'ana@hdl.com', password: 'segredo' });
+
+  // os dois formatos de erro do Supabase
+  await assert.rejects(entrar(resposta(400, { error: 'invalid_grant', error_description: 'Invalid login credentials' }), cfg, 'a@b', 'x'), /E-mail ou senha incorretos/);
+  await assert.rejects(entrar(resposta(400, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' }), cfg, 'a@b', 'x'), /E-mail ou senha incorretos/);
+  await assert.rejects(entrar(resposta(200, ok), cfg, '', 'x'), /Informe o e-mail/);
+
+  // renovar: recusa do servidor invalida a sessão; falta de rede não
+  const recusa = await renovar(resposta(400, { error_code: 'refresh_token_not_found', msg: 'Invalid Refresh Token' }), cfg, 'r1').catch((e) => e);
+  assert.equal(recusa.invalida, true);
+  const offline = await renovar(async () => { throw new TypeError('fetch failed'); }, cfg, 'r1').catch((e) => e);
+  assert.equal(offline.semConexao, true);
+  assert.equal(offline.invalida, false);
+  const fora = await renovar(resposta(503, {}), cfg, 'r1').catch((e) => e);
+  assert.equal(fora.semConexao, true);
+
+  // perfil (account_status): só os campos usados, cor validada, situação e papel em português
+  const p = await perfil(resposta(200, { id: 7, username: 'ana', displayName: 'Ana Lima', avatarColor: '#2f6f5e', status: 'active', hdlRole: 'admin', isAdmin: true }), cfg, 'a1');
+  assert.deepEqual(p, { id: 7, usuario: 'ana', nome: 'Ana Lima', cor: '#2f6f5e', situacao: 'ativa', papel: 'admin', admin: true });
+  assert.match(chamadas.at(-1).url, /\/rest\/v1\/rpc\/account_status$/);
+  assert.equal(chamadas.at(-1).init.headers.authorization, 'Bearer a1');
+  const pendente = await perfil(resposta(200, { id: 8, username: 'bia', avatarColor: 'red;background:url(x)', status: 'pending', hdlRole: null, isAdmin: false }), cfg, 'a1');
+  assert.equal(pendente.cor, null);
+  assert.equal(pendente.nome, 'bia');
+  assert.equal(pendente.situacao, 'pendente');
+  assert.equal(pendente.admin, false);
+  await assert.rejects(perfil(resposta(200, null), cfg, 'a1'), /perfil/);
+
+  chamadas.length = 0;
+  await sair(resposta(204), cfg, 'a1');
+  assert.match(chamadas[0].url, /\/auth\/v1\/logout\?scope=local$/);
+});
+
+test('conta HDL: cadastro com convite', async () => {
+  const cfg = { url: 'https://exemplo.supabase.co', chave: 'pub' };
+  const dados = { email: ' bia@hdl.com ', codigo: 'ABCD-EFGH-JKLM', usuario: 'Bia', nome: 'Bia Souza', senha: '12345678' };
+  // responde conforme o caminho: check_signup e depois signup
+  const servidor = (checagem, signup) => {
+    const chamadas = [];
+    const fetch = async (url, init) => {
+      chamadas.push({ url, corpo: init.body ? JSON.parse(init.body) : null, auth: init.headers.authorization });
+      const [status, corpo] = url.includes('check_signup') ? checagem : signup;
+      return new Response(corpo === undefined ? null : JSON.stringify(corpo), { status });
+    };
+    return { fetch, chamadas };
+  };
+
+  const ok = servidor([200, null], [200, { access_token: 'a', refresh_token: 'r', expires_in: 3600, user: { email: 'bia@hdl.com' } }]);
+  const s = await cadastrar(ok.fetch, cfg, dados);
+  assert.equal(s.refreshToken, 'r');
+  assert.deepEqual(ok.chamadas[0].corpo, { p_username: 'bia', p_code: 'ABCD-EFGH-JKLM', p_email: 'bia@hdl.com' });
+  assert.equal(ok.chamadas[0].auth, undefined); // conferência antes de ter conta: sem token
+  assert.deepEqual(ok.chamadas[1].corpo.data, { username: 'bia', display_name: 'Bia Souza', registration_code: 'ABCD-EFGH-JKLM' });
+
+  // o banco recusa o convite: a mensagem dele aparece e o cadastro nem é tentado
+  const recusa = servidor([200, 'Convite inválido, vencido ou de outro e-mail. Peça um convite a um administrador da HDL.'], [500, {}]);
+  await assert.rejects(cadastrar(recusa.fetch, cfg, dados), /Convite inválido/);
+  assert.equal(recusa.chamadas.length, 1);
+
+  // convite revogado entre a conferência e o cadastro: o gatilho do banco recusa (500)
+  await assert.rejects(cadastrar(servidor([200, null], [500, { msg: 'Database error saving new user' }]).fetch, cfg, dados), /Confira o código/);
+  // projeto com confirmação de e-mail ligada: conta criada sem sessão
+  await assert.rejects(cadastrar(servidor([200, null], [200, { id: 'x', email: 'bia@hdl.com' }]).fetch, cfg, dados), /confirmado/);
+  await assert.rejects(cadastrar(ok.fetch, cfg, { ...dados, senha: '123' }), /8 caracteres/);
+  await assert.rejects(cadastrar(ok.fetch, cfg, { ...dados, codigo: ' ' }), /Preencha/);
 });
 
 /** fetch que manda um pedaço e depois trava, como uma conexão que caiu; respeita o signal como o fetch real. */

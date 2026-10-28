@@ -49,10 +49,11 @@ const data = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '');
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const iniciais = (nome) => nome.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+
 function iconeApp(a, grande = false) {
   const cls = `app-icone${grande ? ' g' : ''}`;
-  const iniciais = a.nome.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-  const fallback = h('span', { class: cls, 'aria-hidden': 'true' }, iniciais);
+  const fallback = h('span', { class: cls, 'aria-hidden': 'true' }, iniciais(a.nome));
   if (!a.icone) return fallback;
   const img = h('img', { class: cls, src: a.icone, alt: '' });
   img.addEventListener('error', () => img.replaceWith(fallback));
@@ -148,6 +149,7 @@ const TITULOS = {
   todos: ['CATÁLOGO HDL', 'Todos os aplicativos'],
   instalados: ['NESTE COMPUTADOR', 'Instalados'],
   atualizacoes: ['MANUTENÇÃO', 'Atualizações'],
+  pessoas: ['ADMINISTRAÇÃO', 'Pessoas'],
 };
 
 function render() {
@@ -172,6 +174,18 @@ function render() {
   for (const b of document.querySelectorAll('[data-filtro]')) {
     if (b.dataset.filtro === filtro) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
+  }
+
+  // Pessoas (administração) troca o catálogo inteiro pela lista de contas e convites
+  const naPessoas = filtro === 'pessoas';
+  $('pessoas').hidden = !naPessoas;
+  document.querySelector('.ferramentas').hidden = naPessoas;
+  document.querySelector('.chips').hidden = naPessoas;
+  $('destaques').hidden = naPessoas;
+  if (naPessoas) {
+    $('biblioteca').hidden = true;
+    renderPessoas();
+    return;
   }
 
   const busca = (a) => !termo || [a.nome, a.descricao, a.categoria].some((x) => x.toLowerCase().includes(termo));
@@ -258,6 +272,271 @@ api.on('ocupado', ({ id, status }) => {
   if (a) { a.ocupado = status; render(); }
 });
 api.on('central-status', mostrarStatusCentral);
+api.on('conta', mostrarConta);
+
+// ------------------------------------------------------------ conta HDL
+let conta = { logado: false };
+let bootTerminou = false;
+let painelEntrada = 'entrar'; // sem sessão: 'entrar' ou 'cadastro'
+let timerPessoas = null;
+
+const ehAdmin = (c) => Boolean(c.logado && c.situacao === 'ativa' && c.admin);
+
+function mostrarConta(c) {
+  const eraAdmin = ehAdmin(conta);
+  conta = c;
+  $('conta-card').hidden = !c.logado;
+  if (c.logado) {
+    $('conta-nome').textContent = c.nome;
+    $('conta-nome').title = c.nome;
+    $('conta-usuario').textContent = c.semConexao ? 'sem conexão' : `@${c.usuario}`;
+    $('conta-usuario').classList.toggle('ambar', Boolean(c.semConexao));
+    $('conta-usuario').title = c.semConexao ? 'Sem conexão com o servidor da HDL. Você continua com a sessão salva; ela é renovada quando a internet voltar.' : (c.email ?? '');
+    const avatar = $('conta-avatar');
+    avatar.textContent = iniciais(c.nome);
+    avatar.style.backgroundColor = c.cor ?? '';
+  }
+  const admin = ehAdmin(c);
+  $('secao-admin').hidden = !admin;
+  if (admin && !eraAdmin) {
+    atualizarPessoas();
+    timerPessoas = setInterval(atualizarPessoas, 2 * 60 * 1000);
+  } else if (!admin) {
+    clearInterval(timerPessoas);
+    if (filtro === 'pessoas') { filtro = 'todos'; render(); }
+  }
+  atualizarEntrada();
+}
+
+/** Mostra a tela certa por cima da Central: entrar, criar conta, ou a conta aguardando aprovação. */
+function atualizarEntrada() {
+  if (!bootTerminou) return; // durante a tela de carregamento quem decide é o fim do carregar()
+  const tela = $('entrada');
+  const situacao = conta.logado ? conta.situacao ?? 'ativa' : null;
+  const mostrar = !conta.logado || situacao !== 'ativa';
+  const antes = tela.hidden ? null : tela.dataset.painel;
+  tela.hidden = !mostrar;
+  $('casca').inert = mostrar;
+  if (!mostrar) return;
+  const painel = conta.logado ? 'situacao' : painelEntrada;
+  tela.dataset.painel = painel;
+  $('entrada-versao').textContent = versaoCentral ? `v${versaoCentral}` : '';
+  $('form-entrar').hidden = painel !== 'entrar';
+  $('form-cadastro').hidden = painel !== 'cadastro';
+  $('painel-situacao').hidden = painel !== 'situacao';
+  if (painel === 'situacao') preencherSituacao(situacao);
+  if (antes === painel) return; // mesma tela: não apaga o que a pessoa digitou nem tira o foco
+  if (painel === 'entrar') {
+    $('entrada-senha').value = '';
+    erroEntrada('');
+    $('entrada-email').focus();
+  } else if (painel === 'cadastro') {
+    erroCampo('cad-erro', '');
+    $('cad-email').focus();
+  } else {
+    $(situacao === 'pendente' ? 'situacao-verificar' : 'situacao-sair').focus();
+  }
+}
+
+function preencherSituacao(situacao) {
+  const pendente = situacao === 'pendente';
+  $('situacao-icone').className = `situacao-icone${pendente ? ' ambar' : ' perigo'}`;
+  $('situacao-icone').replaceChildren(pendente
+    ? svg('M6 2h12M6 22h12', 'M7 2c0 5 5 6 5 10s-5 5-5 10M17 2c0 5-5 6-5 10s5 5 5 10')
+    : svg('M18 6 6 18', 'M6 6l12 12'));
+  $('situacao-sobrancelha').textContent = pendente ? '// AGUARDANDO APROVAÇÃO' : '// ACESSO NÃO APROVADO';
+  $('situacao-titulo').textContent = pendente ? `Quase lá, ${conta.nome.split(/\s+/)[0]}` : 'Acesso não aprovado';
+  $('situacao-texto').textContent = pendente
+    ? 'Sua conta foi criada. Um administrador da HDL precisa aprovar o acesso; a Central confere sozinha a cada 30 segundos e libera tudo assim que for aprovado.'
+    : 'Um administrador da HDL não aprovou esta conta. Se achar que é um engano, fale com ele.';
+  $('situacao-verificar').hidden = !pendente;
+}
+
+function erroCampo(id, msg) {
+  $(id).hidden = !msg;
+  $(id).textContent = msg;
+}
+const erroEntrada = (msg) => erroCampo('entrada-erro', msg);
+
+/** Botão de envio ocupado enquanto fn roda; o erro aparece na caixa indicada. */
+async function enviando(botao, rotulo, erroId, fn) {
+  const original = botao.textContent;
+  erroCampo(erroId, '');
+  botao.disabled = true;
+  botao.textContent = rotulo;
+  try {
+    await fn();
+  } catch (err) {
+    erroCampo(erroId, err.message);
+  } finally {
+    botao.disabled = false;
+    botao.textContent = original;
+  }
+}
+
+$('form-entrar').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const botao = $('entrada-botao');
+  erroEntrada('');
+  botao.disabled = true;
+  botao.textContent = 'Entrando…';
+  try {
+    mostrarConta(await api.entrar($('entrada-email').value, $('entrada-senha').value));
+    $('entrada-senha').value = '';
+    toast(`Olá, ${conta.nome}!`);
+  } catch (err) {
+    erroEntrada(err.message);
+    $('entrada-senha').select();
+  } finally {
+    botao.disabled = false;
+    botao.textContent = 'Entrar';
+  }
+});
+$('esqueci').addEventListener('click', () => {
+  const txt = $('esqueci-txt');
+  txt.hidden = !txt.hidden;
+  $('esqueci').setAttribute('aria-expanded', String(!txt.hidden));
+});
+$('ir-cadastro').addEventListener('click', () => { painelEntrada = 'cadastro'; atualizarEntrada(); });
+$('ir-entrar').addEventListener('click', () => { painelEntrada = 'entrar'; atualizarEntrada(); });
+$('form-cadastro').addEventListener('submit', (e) => {
+  e.preventDefault();
+  enviando($('cad-botao'), 'Criando conta…', 'cad-erro', async () => {
+    mostrarConta(await api.cadastrar({
+      email: $('cad-email').value, codigo: $('cad-codigo').value, nome: $('cad-nome').value,
+      usuario: $('cad-usuario').value, senha: $('cad-senha').value,
+    }));
+    $('cad-senha').value = '';
+    $('cad-codigo').value = '';
+  });
+});
+$('situacao-verificar').addEventListener('click', () => executar(async () => {
+  $('situacao-verificar').disabled = true;
+  try {
+    mostrarConta(await api.verificarConta());
+    if (conta.situacao === 'pendente') toast('Ainda aguardando a aprovação de um administrador.');
+    else if (conta.situacao === 'ativa') toast(`Acesso aprovado. Bem-vindo, ${conta.nome}!`);
+  } finally {
+    $('situacao-verificar').disabled = false;
+  }
+}));
+const sairDaConta = () => executar(async () => {
+  painelEntrada = 'entrar';
+  mostrarConta(await api.sair());
+});
+$('sair').addEventListener('click', sairDaConta);
+$('situacao-sair').addEventListener('click', sairDaConta);
+
+// ------------------------------------------------------------ pessoas (administração)
+const PAPEIS = { owner: 'Proprietário', admin: 'Administrador', member: 'Membro', guest: 'Convidado' };
+const ESTADOS_CONVITE = { open: ['Em aberto', 'ciano'], accepted: ['Aceito', 'ok'], expired: ['Vencido', 'neutro'], revoked: ['Revogado', 'neutro'] };
+let pessoas = { pendentes: [], convites: [], erro: null, carregado: false };
+
+async function atualizarPessoas() {
+  if (!ehAdmin(conta)) return;
+  try {
+    pessoas = { ...(await api.pessoas()), erro: null, carregado: true };
+  } catch (err) {
+    pessoas = { ...pessoas, erro: err.message, carregado: true };
+  }
+  const n = pessoas.pendentes.length;
+  $('n-pendentes').hidden = !n;
+  $('n-pendentes').textContent = String(n);
+  if (filtro === 'pessoas') renderPessoas();
+}
+
+function avatarDe(nome, cor) {
+  const el = h('span', { class: 'avatar', 'aria-hidden': 'true' }, iniciais(nome));
+  if (/^#[0-9a-f]{6}$/i.test(cor ?? '')) el.style.backgroundColor = cor;
+  return el;
+}
+
+function renderPessoas() {
+  erroCampo('pessoas-erro', pessoas.erro ?? '');
+  const pendentes = pessoas.pendentes.map((p) => h('article', { class: 'pessoa' },
+    avatarDe(p.displayName, p.avatarColor),
+    h('div', { class: 'pessoa-txt' },
+      h('b', {}, p.displayName),
+      h('small', {}, `@${p.username} · ${p.email}`),
+      h('small', {}, `Convidado${p.invitedBy ? ` por ${p.invitedBy}` : ''} como ${PAPEIS[p.invitedRole] ?? 'Membro'} · conta criada em ${data(p.createdAt)}`)),
+    h('div', { class: 'botoes' },
+      h('button', { type: 'button', class: 'btn btn-p', onclick: () => aprovar(p) }, 'Aprovar'),
+      h('button', { type: 'button', class: 'btn btn-p btn-sec', onclick: () => recusar(p) }, 'Recusar'))));
+  $('lista-pendentes').replaceChildren(...(pendentes.length ? pendentes
+    : [h('p', { class: 'pessoas-vazio' }, pessoas.carregado ? 'Ninguém aguardando aprovação.' : 'Carregando…')]));
+
+  const convites = pessoas.convites.map((i) => {
+    const [rotulo, cls] = ESTADOS_CONVITE[i.state] ?? [i.state, 'neutro'];
+    return h('article', { class: 'pessoa convite' },
+      h('div', { class: 'pessoa-txt' },
+        h('b', {}, i.email),
+        h('small', {}, `${PAPEIS[i.role] ?? i.role} · criado por ${i.createdBy ?? '—'} em ${data(i.createdAt)}${i.state === 'open' ? ` · vale até ${data(i.expiresAt)}` : ''}`)),
+      h('span', { class: `etiqueta-estado ${cls}` }, rotulo),
+      i.state === 'open' ? h('button', { type: 'button', class: 'btn btn-p btn-sec', onclick: () => revogar(i) }, 'Revogar') : null);
+  });
+  $('lista-convites').replaceChildren(...(convites.length ? convites
+    : [h('p', { class: 'pessoas-vazio' }, pessoas.carregado ? 'Nenhum convite nos últimos 30 dias.' : 'Carregando…')]));
+}
+
+const aprovar = (p) => executar(async () => {
+  await api.aprovar(p.id);
+  toast(`${p.displayName} foi aprovado e entrou na HDL.`);
+  await atualizarPessoas();
+});
+const recusar = (p) => executar(async () => {
+  if (!confirm(`Recusar o acesso de ${p.displayName} (${p.email})?`)) return;
+  await api.recusar(p.id);
+  toast(`O acesso de ${p.displayName} foi recusado.`);
+  await atualizarPessoas();
+});
+const revogar = (i) => executar(async () => {
+  if (!confirm(`Revogar o convite de ${i.email}? O código deixa de valer na hora.`)) return;
+  await api.revogarConvite(i.id);
+  toast('Convite revogado.');
+  await atualizarPessoas();
+});
+
+let mensagemConvite = '';
+$('btn-convidar').addEventListener('click', () => {
+  $('form-convite').hidden = false;
+  $('convite-pronto').hidden = true;
+  $('convite-email').value = '';
+  $('convite-papel').value = 'member';
+  // só o proprietário pode convidar administradores (o banco também confere)
+  const opAdmin = $('convite-papel').querySelector('[value="admin"]');
+  opAdmin.hidden = opAdmin.disabled = conta.papel !== 'owner';
+  erroCampo('convite-erro', '');
+  $('dlg-convite').showModal();
+  $('convite-email').focus();
+});
+$('convite-cancelar').addEventListener('click', () => $('dlg-convite').close());
+$('form-convite').addEventListener('submit', (e) => {
+  e.preventDefault();
+  enviando($('convite-gerar'), 'Gerando…', 'convite-erro', async () => {
+    const { invite, code } = await api.convidar($('convite-email').value, $('convite-papel').value);
+    const validade = data(invite.expiresAt);
+    $('convite-para').textContent = `Para ${invite.email}, como ${PAPEIS[invite.role] ?? invite.role}. Vale até ${validade} e só pode ser usado uma vez.`;
+    $('convite-codigo').textContent = code;
+    mensagemConvite = [
+      'Você foi convidado para a Central HDL, a plataforma de aplicativos da HDL.',
+      '',
+      '1. Baixe e instale a Central: https://github.com/contatomeigre/central-hdl/releases/latest',
+      '2. Abra a Central e clique em "Criar minha conta".',
+      `3. Use o e-mail ${invite.email} e o código ${code}.`,
+      '',
+      `O convite vale até ${validade}. Depois de criar a conta, aguarde a aprovação de um administrador.`,
+    ].join('\n');
+    $('form-convite').hidden = true;
+    $('convite-pronto').hidden = false;
+    $('convite-copiar').focus();
+    atualizarPessoas();
+  });
+});
+$('convite-copiar').addEventListener('click', () => executar(async () => {
+  await api.copiar(mensagemConvite);
+  toast('Mensagem copiada. Cole no WhatsApp ou no e-mail.');
+}));
+$('convite-ok').addEventListener('click', () => $('dlg-convite').close());
 
 // ------------------------------------------------------------ atualização da própria Central
 const reiniciarCentral = () => executar(() => api.reiniciar());
@@ -308,7 +587,11 @@ async function verificarCentral({ avisar = true } = {}) {
 }
 
 for (const b of document.querySelectorAll('[data-filtro]')) {
-  b.addEventListener('click', () => { filtro = b.dataset.filtro; render(); });
+  b.addEventListener('click', () => {
+    filtro = b.dataset.filtro;
+    render();
+    if (filtro === 'pessoas') atualizarPessoas();
+  });
 }
 $('busca').addEventListener('input', render);
 document.addEventListener('keydown', (e) => {
@@ -399,6 +682,13 @@ async function carregar() {
     $('boot-versao').textContent = `v${info.versao}`;
     mostrarStatusCentral(info.status);
   });
+  await etapa('Verificando sua conta HDL', 24, async () => {
+    mostrarConta(await api.conta());
+    if (!conta.logado) return { texto: 'ENTRAR', tipo: 'aviso' };
+    if (conta.situacao === 'pendente') return { texto: 'AGUARDANDO APROVAÇÃO', tipo: 'aviso' };
+    if (conta.situacao === 'recusada') return { texto: 'NÃO APROVADA', tipo: 'falha' };
+    return conta.semConexao ? { texto: 'SEM CONEXÃO', tipo: 'aviso' } : { texto: 'CONECTADO' };
+  });
   const carregado = await etapa('Sincronizando catálogo do repositório HDL', 78, async () => {
     apps = await api.estado();
     return { texto: plural(apps.length, 'APP', 'APPS') };
@@ -413,12 +703,17 @@ async function carregar() {
     return { texto: 'PRONTO' };
   });
 
-  $('boot-etapa').textContent = carregado?.tipo === 'falha' ? 'ABRINDO A CENTRAL SEM O CATÁLOGO' : 'TUDO PRONTO · ABRINDO A CENTRAL';
+  $('boot-etapa').textContent = !conta.logado ? 'ENTRE COM SUA CONTA HDL'
+    : conta.situacao === 'pendente' ? 'CONTA AGUARDANDO APROVAÇÃO'
+    : carregado?.tipo === 'falha' ? 'ABRINDO A CENTRAL SEM O CATÁLOGO' : 'TUDO PRONTO · ABRINDO A CENTRAL';
   $('boot-frase').textContent = 'ambiente pronto';
   // janela aberta oculta (na bandeja): os temporizadores ficam lentos, então fecha direto
   while (pct < 100 && !document.hidden) await espera(30);
   await espera(450);
   clearInterval(relogio);
+  // a tela de entrada fica por baixo da de carregamento, que some por cima dela
+  bootTerminou = true;
+  atualizarEntrada();
   const boot = $('boot');
   boot.classList.add('saindo');
   boot.addEventListener('transitionend', () => boot.remove(), { once: true });
