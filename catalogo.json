@@ -9,6 +9,17 @@
       "nomeWindows": "Prosa",
       "executavel": "Prosa.exe",
       "icone": "https://raw.githubusercontent.com/hdldev123/central-hdl/main/icones/prosa.png"
+    },
+    {
+      "id": "fluxo",
+      "nome": "Fluxo",
+      "descricao": "Demandas, backlog e quadro kanban dos projetos da equipe.",
+      "categoria": "Produtividade",
+      "repo": "hdldev123/fluxo-releases",
+      "nomeWindows": "Fluxo",
+      "executavel": "Fluxo.exe",
+      "icone": "https://raw.githubusercontent.com/hdldev123/central-hdl/main/icones/fluxo.png",
+      "tag": "fluxo"
     }
   ]
 }
