@@ -5,8 +5,9 @@
 //   nesse commit). Em emergência: npm run publicar -- --ignorar-git
 // - Recusa reaproveitar uma versão já publicada: quem já a tem nunca receberia a correção.
 //   Se a publicação anterior foi interrompida antes do latest.yml subir, ela é retomada.
-// - O token vem do GitHub CLI (conta dona do repositório, em "build.publish"),
-//   então não é preciso criar nem colar token.
+// - O token vem do GitHub CLI, então não é preciso criar nem colar token. Publica com a conta
+//   dona do repositório (em "build.publish") ou com qualquer colaboradora com permissão de
+//   escrita nele (ex.: hdldev123, davydsonmr1): usa a primeira logada no gh que puder.
 // - Cria a release antes do electron-builder: sozinho ele às vezes tenta criá-la
 //   duas vezes em paralelo na primeira publicação e uma das tentativas falha.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -36,13 +37,35 @@ if (process.argv.includes('--ignorar-git')) {
 
 const env = { ...process.env };
 delete env.GITHUB_TOKEN; // nesta máquina pode ter o token de outra conta
-if (!env.GH_TOKEN) {
+const ghToken = (...args) => {
   try {
-    env.GH_TOKEN = execFileSync('gh', ['auth', 'token', '--user', owner], { env, encoding: 'utf8' }).trim();
+    return execFileSync('gh', ['auth', 'token', ...args], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
   } catch {
-    falhar(`faça login no GitHub CLI com a conta ${owner}: gh auth login --web`);
+    return null; // gh não instalado ou conta não logada
   }
+};
+/** Login da conta do token, se ela puder publicar (escrita no repositório); senão null. */
+async function quemPublica(token) {
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+    headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json' },
+  });
+  if (!res.ok || (await res.json()).permissions?.push !== true) return null;
+  const eu = await fetch('https://api.github.com/user', { headers: { authorization: `Bearer ${token}` } });
+  return eu.ok ? (await eu.json()).login : '?';
 }
+
+// GH_TOKEN definido à mão vale sozinho; senão tenta a conta dona e depois a conta ativa do gh
+const candidatos = env.GH_TOKEN ? [env.GH_TOKEN] : [ghToken('--user', owner), ghToken()];
+let conta = null;
+for (const token of new Set(candidatos.filter(Boolean))) {
+  conta = await quemPublica(token);
+  if (conta) { env.GH_TOKEN = token; break; }
+}
+if (!conta) {
+  falhar(`nenhuma conta logada no GitHub CLI pode publicar em ${owner}/${repo}. Entre com a conta ${owner} `
+    + 'ou com uma colaboradora com permissão de escrita: gh auth login --web');
+}
+console.log(`publicando como ${conta}`);
 
 const github = (caminho, init = {}) => fetch(`https://api.github.com/repos/${owner}/${repo}${caminho}`, {
   ...init,
