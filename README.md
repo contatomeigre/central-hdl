@@ -116,6 +116,9 @@ Copie o código e aperte Enter; feche a aba que abrir no navegador normal. Depoi
    ```
    - `nomeWindows` é o nome que aparece em "Aplicativos instalados" (sem a versão), normalmente o `productName`.
    - `executavel` é o `.exe` dentro da pasta de instalação.
+   - `cor` (opcional, `#rrggbb`) é a cor de destaque da tela de abertura do app; sem ela, usa o ciano da Central.
+
+Ao clicar em **Abrir**, todo app do catálogo ganha a mesma tela de abertura, montada a partir da entrada dele (nome, ícone, versão, executável e `cor`). As etapas são reais: verifica a instalação, inicia o `.exe` e espera a janela do app aparecer (até 20 s; se não aparecer, avisa que ele abriu em segundo plano). Se falhar, a tela mostra o motivo e um botão **Fechar**. Não é preciso nada no app novo para ter essa tela.
 
 A Central relê o catálogo a cada verificação (a cada 30 min ou em "Procurar atualizações"), então **não é preciso publicar uma versão nova dela** para aparecer um app novo. Sem internet, ela usa a última cópia do catálogo que baixou.
 

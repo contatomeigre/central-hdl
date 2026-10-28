@@ -150,6 +150,68 @@ svg { flex: none; }
   .boot-anel, .terminal { display: none; }
 }
 
+/* ---------------------------------------------------------------- abertura de app
+   Modelo de todos os apps do catálogo; --acento vem de "cor" no catalogo.json. */
+.abertura {
+  --acento: var(--ciano);
+  --acento-brilho: color-mix(in srgb, var(--acento) 45%, transparent);
+  position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 16px;
+  background: rgba(3, 5, 9, .74); backdrop-filter: blur(3px);
+  animation: entra .2s ease-out both; transition: opacity .3s ease, visibility .3s;
+}
+.abertura:focus { outline: none; }
+.abertura.saindo { opacity: 0; visibility: hidden; }
+.abertura-caixa {
+  position: relative; overflow: hidden; width: min(440px, 100%); max-height: 100%;
+  padding: 26px 36px 34px; display: flex; flex-direction: column; align-items: center; gap: 18px;
+  border: 1px solid var(--linha); border-radius: 16px; box-shadow: 0 24px 60px rgba(0, 0, 0, .6);
+  background-color: var(--cartao);
+  background-image: linear-gradient(rgba(61, 214, 245, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(61, 214, 245, .035) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.abertura-canto { position: absolute; width: 14px; height: 14px; border: 0 solid var(--acento); opacity: .8; }
+.abertura-canto.c1 { left: 12px; top: 12px; border-left-width: 2px; border-top-width: 2px; }
+.abertura-canto.c2 { right: 12px; top: 12px; border-right-width: 2px; border-top-width: 2px; }
+.abertura-canto.c3 { left: 12px; bottom: 12px; border-left-width: 2px; border-bottom-width: 2px; }
+.abertura-canto.c4 { right: 12px; bottom: 12px; border-right-width: 2px; border-bottom-width: 2px; }
+.abertura-topo { align-self: stretch; display: flex; justify-content: space-between; gap: 12px; font-size: 11px; letter-spacing: .1em; color: var(--texto-3); }
+.abertura-anel { position: relative; width: 120px; height: 120px; display: grid; place-items: center; }
+.abertura-anel svg { position: absolute; inset: 0; width: 120px; height: 120px; }
+.abertura-anel .orbita { fill: none; stroke: var(--linha-2); stroke-width: 1.5; stroke-dasharray: 2 6; }
+.abertura-anel .trilho { fill: none; stroke: var(--trilho); stroke-width: 3; }
+.abertura-anel .arco { fill: none; stroke: var(--acento); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 60 255; transition: stroke-dasharray .4s ease, stroke .2s; }
+.abertura-anel .satelite { fill: var(--acento); transition: opacity .2s; }
+.abertura-anel .giro { animation: gira 1.6s linear infinite; }
+.abertura-anel .app-icone { box-shadow: 0 0 32px var(--acento-brilho); }
+.abertura.pronta .giro, .abertura.falhou .giro { animation: none; }
+.abertura.pronta .arco { stroke-dasharray: 315 0; }
+.abertura.pronta .satelite, .abertura.falhou .satelite { opacity: 0; }
+.abertura.falhou .arco { stroke: var(--perigo); }
+.abertura-titulo { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.abertura-titulo h2 { font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+.abertura-titulo small { font-size: 12px; color: var(--texto-3); letter-spacing: .04em; }
+.abertura-etapas { align-self: stretch; list-style: none; margin: 0; padding: 10px 14px; min-height: 92px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 20px; background: rgba(7, 9, 14, .7); border: 1px solid var(--linha-suave); border-radius: 10px; }
+.abertura-etapas li { display: flex; gap: 10px; align-items: baseline; animation: entra .25s ease-out both; }
+.abertura-etapas .seta { color: var(--acento); flex: none; }
+.abertura-etapas .txt { color: #c9d4e0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.abertura-etapas .res { font-weight: 700; color: var(--acento); flex: none; }
+.abertura-etapas .res.rodando { font-weight: 400; color: var(--texto-3); animation: pulsa 1.4s ease-in-out infinite; }
+.abertura-etapas .res.aviso { color: var(--ambar); }
+.abertura-etapas .res.falha { color: var(--perigo); }
+.abertura-progresso { align-self: stretch; display: flex; flex-direction: column; gap: 8px; }
+.abertura-progresso .boot-linha b { font-size: 18px; }
+.abertura-progresso .boot-linha em { color: var(--acento); }
+.abertura-progresso .segmentos { height: 8px; }
+.abertura-progresso .segmentos i.on { background: var(--acento); box-shadow: 0 0 8px var(--acento-brilho); }
+.abertura.falhou .abertura-progresso .segmentos i.on { background: var(--perigo); box-shadow: none; }
+.abertura.falhou .abertura-progresso .boot-linha em { color: var(--perigo); }
+.abertura-rodape { align-self: stretch; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.abertura-rodape:empty { display: none; }
+.abertura-erro { margin: 0; color: var(--perigo); font-size: 13px; text-align: center; }
+@media (max-height: 600px) {
+  .abertura-anel { display: none; }
+}
+
 /* ---------------------------------------------------------------- estrutura */
 .casca { height: 100%; display: grid; grid-template-columns: 232px minmax(0, 1fr); }
 .lateral { background: var(--lateral); border-right: 1px solid var(--linha-suave); padding: 24px 16px; display: flex; flex-direction: column; gap: 28px; overflow-y: auto; }
