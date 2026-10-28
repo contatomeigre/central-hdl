@@ -79,8 +79,11 @@ git commit -am "Central HDL x.y.z"; git push
 npm run publicar
 ```
 
+Quem pode publicar: a conta `contatomeigre` ou qualquer colaboradora com permissão de **escrita** no repositório (hoje `hdldev123` e `davydsonmr1`), logada no GitHub CLI com `gh auth login --web`. O script tenta primeiro a `contatomeigre` e depois a conta ativa do `gh`, e mostra com qual conta está publicando. Para dar acesso a mais alguém: **Settings → Collaborators** do repositório, com o papel *Write*.
+
 O `npm run publicar` recusa publicar quando:
 
+- nenhuma conta logada no `gh` tem permissão de escrita no repositório;
 - há alterações sem commit, você não está na `main`, ou a `main` local está diferente da `origin/main`. O instalador é gerado da pasta local; com essas travas ele corresponde exatamente ao commit da tag (a release é criada nesse commit). Em emergência: `npm run publicar -- --ignorar-git`;
 - a versão já foi publicada (a release já tem o `latest.yml`). Quem já tem essa versão nunca receberia a correção: suba a versão. Se uma publicação anterior foi interrompida antes do `latest.yml` subir, ela é retomada.
 
@@ -88,6 +91,8 @@ A **primeira** instalação é a única feita à mão: envie para as pessoas o `
 `https://github.com/contatomeigre/central-hdl/releases/latest`
 
 ## Login com a conta secundária no GitHub CLI
+
+Colaboradores publicam com a própria conta: basta `gh auth login --web` no navegador de sempre. O passo abaixo é só para quem precisa logar numa conta diferente da que está aberta no navegador.
 
 Esta máquina tem uma variável `GITHUB_TOKEN` com o token do `matheusmeigre`, que tem prioridade sobre as contas do `gh`. Para logar na `contatomeigre`:
 
