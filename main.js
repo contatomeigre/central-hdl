@@ -250,11 +250,22 @@ function loadCatalog({ fresh = false } = {}) {
   return catalog.promise;
 }
 
+/** Tags de acesso da conta logada (vazio sem login ou com a conta ainda não ativa). */
+const minhasTags = () => (sessao?.perfil?.situacao === 'ativa' ? sessao.perfil.tags ?? [] : []);
+/**
+ * App sem tag no catálogo é livre; com tag, precisa dela ou do godmod (que o banco só dá a
+ * administradores). A Central só esconde: quem garante de verdade é o banco de cada app.
+ */
+const temAcesso = (a, tags = minhasTags()) => !a.tag || tags.includes(a.tag) || tags.includes('godmod');
+
 /** Estado de cada app: versão instalada, última publicada, se está aberto. fresh: relê o catálogo do GitHub. */
 async function collectState({ fresh = false } = {}) {
   const [catalog, programs] = await Promise.all([loadCatalog({ fresh }), installedPrograms()]);
   const apps = await Promise.all((catalog.apps ?? []).map(async (a) => {
     const inst = findInstalled(programs, a.nomeWindows ?? a.nome);
+    const acesso = temAcesso(a);
+    // sem acesso, só aparece se já estiver instalado (para poder desinstalar)
+    if (!acesso && !inst) return null;
     let latest = null;
     let erro = null;
     try { latest = await latestRelease(net.fetch, a.repo); } catch (err) {
@@ -273,13 +284,22 @@ async function collectState({ fresh = false } = {}) {
       cor: /^#[0-9a-f]{6}$/i.test(a.cor ?? '') ? a.cor : null,
       instalada: installed,
       ultima: latest ? { versao: latest.version, data: latest.releaseDate, tamanho: latest.size, notas: latest.notesUrl } : null,
-      atualizacao: Boolean(installed && latest && compareVersions(latest.version, installed) > 0),
+      // quem perdeu o acesso não recebe versões novas
+      atualizacao: Boolean(acesso && installed && latest && compareVersions(latest.version, installed) > 0),
       rodando: installed ? await isRunning(a.executavel) : false,
       ocupado: busy.get(a.id) ?? null,
+      tag: a.tag ?? null,
+      semAcesso: !acesso,
       erro,
     };
   }));
-  return apps;
+  return apps.filter(Boolean);
+}
+
+/** Apps do catálogo que exigem tag, para a seção Pessoas oferecer (ex.: [{ tag: 'fluxo', nome: 'Fluxo' }]). */
+async function tagsDoCatalogo() {
+  const { apps = [] } = await loadCatalog();
+  return apps.filter((a) => a.tag).map((a) => ({ tag: a.tag, nome: a.nome }));
 }
 
 async function catalogEntry(id) {
@@ -305,6 +325,7 @@ async function install(id, { fechar = false, segundoPlano = false } = {}) {
   let dir = null;
   try {
     const a = await catalogEntry(id);
+    if (!temAcesso(a)) throw new Error(`Você não tem acesso ao ${a.nome}. Peça a um administrador da HDL.`);
     const wasRunning = await isRunning(a.executavel);
     if (wasRunning && !fechar) return { precisaFechar: true };
     setBusy(id, 'baixando');
@@ -394,6 +415,8 @@ async function backgroundCheck() {
   if (checking) return;
   checking = true;
   try {
+    // relê situação e tags: o que um administrador mudar chega aqui em até 30 min
+    if (sessao && !semConexao) await atualizarPerfil().catch(() => {});
     const apps = await collectState({ fresh: true });
     send('estado', apps);
     const pending = apps.filter((a) => a.atualizacao);
@@ -540,7 +563,11 @@ function buildTray() {
 const handle = (channel, fn) => ipcMain.handle(channel, async (_e, ...args) => {
   try { return { ok: true, data: await fn(...args) }; } catch (err) { return { ok: false, erro: err.message }; }
 });
-handle('estado', (opts) => collectState({ fresh: Boolean(opts?.atualizar) }));
+handle('estado', async (opts) => {
+  // "Procurar atualizações" também relê as tags da conta
+  if (opts?.atualizar && sessao && !semConexao) await atualizarPerfil().catch(() => {});
+  return collectState({ fresh: Boolean(opts?.atualizar) });
+});
 handle('instalar', (id, opts) => install(String(id), opts ?? {}));
 handle('abrir', async (id) => {
   const a = await catalogEntry(String(id));
@@ -569,10 +596,17 @@ handle('cadastrar', (dados) => cadastrarConta({
 handle('verificar-conta', () => atualizarPerfil());
 // administração: quem pode é conferido no banco (proprietário ou administrador da organização HDL)
 handle('pessoas', async () => {
-  const [pendentes, convites] = await Promise.all([admin('list_pending_accounts'), admin('list_account_invites')]);
-  return { pendentes: pendentes?.accounts ?? [], convites: convites?.invites ?? [] };
+  const [pendentes, membros, convites, tags] = await Promise.all([
+    admin('list_pending_accounts'), admin('list_hdl_members'), admin('list_account_invites'), tagsDoCatalogo(),
+  ]);
+  return { pendentes: pendentes?.accounts ?? [], membros: membros?.members ?? [], convites: convites?.invites ?? [], tags };
 });
-handle('convidar', (email, papel) => acaoAdmin('create_account_invite', { p_email: String(email ?? ''), p_role: String(papel ?? 'member') }, `criou um convite (${papel})`));
+const listaDeTags = (tags) => (Array.isArray(tags) ? tags.map(String).slice(0, 50) : []);
+handle('convidar', (email, papel, tags) => acaoAdmin('create_account_invite',
+  { p_email: String(email ?? ''), p_role: String(papel ?? 'member'), p_tags: listaDeTags(tags) },
+  `criou um convite (${papel}${listaDeTags(tags).length ? `, tags: ${listaDeTags(tags).join(', ')}` : ''})`));
+handle('definir-tags', (id, tags) => acaoAdmin('set_account_tags', { p_user: Number(id), p_tags: listaDeTags(tags) },
+  `definiu as tags da conta ${id}: ${listaDeTags(tags).join(', ') || '(nenhuma)'}`));
 handle('revogar-convite', (id) => acaoAdmin('revoke_account_invite', { p_invite: Number(id) }, `revogou o convite ${id}`));
 handle('aprovar', (id) => acaoAdmin('approve_account', { p_user: Number(id) }, `aprovou a conta ${id}`));
 handle('recusar', (id) => acaoAdmin('reject_account', { p_user: Number(id) }, `recusou a conta ${id}`));

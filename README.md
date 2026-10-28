@@ -43,6 +43,16 @@ Não existe mais código de cadastro único. Para alguém entrar:
 
 Conta pendente ou recusada não acessa nada no Prosa: as regras do banco só reconhecem contas ativas. As regras ficam na migração `supabase/migrations/20261027180000_conta_hdl_convites.sql` do repositório do Prosa (o banco é o mesmo). A organização HDL é definida em `prosa_private.config.hdl_org_id`; a migração preenche sozinha quando só existe uma organização (ou uma só com "HDL" no nome).
 
+### Tags de acesso aos apps
+
+Cada app do catálogo pode exigir uma **tag** (campo `"tag"`, ex.: `"fluxo"`). App sem tag é livre para todos (o Prosa é livre).
+
+- Proprietários e administradores dão e tiram tags em **Pessoas › Membros e acessos aos apps › Acessos**, e podem já marcar as tags no convite (passam a valer quando a conta é aprovada).
+- **`godmod`** libera todos os apps e só vale para proprietários e administradores: o banco recusa dá-la a outra pessoa e a ignora se a pessoa deixar de ser administradora.
+- A Central esconde os apps sem acesso e não deixa instalá-los nem atualizá-los. Quem perdeu a tag de um app instalado vê o cartão como **Sem acesso**, só com o botão de desinstalar.
+- A Central relê as tags a cada verificação (30 min) e em **Procurar atualizações**: o que um administrador muda chega sozinho.
+- **Quem garante o acesso é o banco de cada app, não a Central** (os instaladores ficam em repositórios públicos). Nas regras de acesso do app, use `prosa_private.has_app_access('<tag>')`. Tabelas e funções na migração `20261028150000_tags_de_acesso.sql` do repositório do Prosa.
+
 ## Onde fica cada coisa
 
 Tudo fica na conta da empresa no GitHub, **`hdldev123`** (a mesma do Luz de Minas e do Rotas):
@@ -124,6 +134,7 @@ Copie o código e aperte Enter; feche a aba que abrir no navegador normal. Depoi
    ```
    - `nomeWindows` é o nome que aparece em "Aplicativos instalados" (sem a versão), normalmente o `productName`.
    - `executavel` é o `.exe` dentro da pasta de instalação.
+   - `tag` (opcional) é a tag de acesso: só quem a tem (ou `godmod`) vê e instala o app. Sem ela, o app é livre para todos. Letras minúsculas, números e hífen; não pode ser `godmod`.
    - `cor` (opcional, `#rrggbb`) é a cor de destaque da tela de abertura do app; sem ela, usa o ciano da Central.
 
 Ao clicar em **Abrir**, todo app do catálogo ganha a mesma tela de abertura, montada a partir da entrada dele (nome, ícone, versão, executável e `cor`). As etapas são reais: verifica a instalação, inicia o `.exe` e espera a janela do app aparecer (até 20 s; se não aparecer, avisa que ele abriu em segundo plano). Se falhar, a tela mostra o motivo e um botão **Fechar**. Não é preciso nada no app novo para ter essa tela.

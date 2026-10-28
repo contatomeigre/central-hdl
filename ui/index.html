@@ -199,6 +199,8 @@
         <p id="pessoas-erro" class="entrada-erro" role="alert" hidden></p>
         <h2 class="mono rotulo">AGUARDANDO APROVAÇÃO</h2>
         <div id="lista-pendentes" class="lista-pessoas"></div>
+        <h2 class="mono rotulo">MEMBROS E ACESSOS AOS APPS</h2>
+        <div id="lista-membros" class="lista-pessoas"></div>
         <h2 class="mono rotulo">CONVITES DOS ÚLTIMOS 30 DIAS</h2>
         <div id="lista-convites" class="lista-pessoas"></div>
       </section>
@@ -227,6 +229,7 @@
           <option value="admin">Administrador</option>
         </select>
       </label>
+      <fieldset class="campo-tags"><legend>Acesso aos apps <small>(valem quando você aprovar a conta)</small></legend><div id="convite-tags" class="caixas-tags"></div></fieldset>
       <p id="convite-erro" class="entrada-erro" role="alert" hidden></p>
       <div class="dlg-rodape"><button id="convite-cancelar" class="btn btn-sec" type="button">Cancelar</button><button id="convite-gerar" class="btn" type="submit">Gerar convite</button></div>
     </form>
@@ -238,6 +241,16 @@
       <p class="dlg-texto aviso">O código não aparece de novo. Se perder, revogue e crie outro convite.</p>
       <div class="dlg-rodape"><button id="convite-copiar" class="btn btn-sec" type="button">Copiar mensagem com o código</button><button id="convite-ok" class="btn" type="button">Concluir</button></div>
     </div>
+  </dialog>
+  <dialog id="dlg-acessos" aria-labelledby="acessos-titulo">
+    <form id="form-acessos" novalidate>
+      <span class="mono sobrancelha">// ACESSO AOS APPS</span>
+      <h2 id="acessos-titulo">Acessos</h2>
+      <p class="dlg-texto" id="acessos-texto"></p>
+      <div id="acessos-tags" class="caixas-tags"></div>
+      <p id="acessos-erro" class="entrada-erro" role="alert" hidden></p>
+      <div class="dlg-rodape"><button id="acessos-cancelar" class="btn btn-sec" type="button">Cancelar</button><button id="acessos-salvar" class="btn" type="submit">Salvar acessos</button></div>
+    </form>
   </dialog>
   <div id="toasts" aria-live="polite"></div>
   <script type="module" src="app.js"></script>
