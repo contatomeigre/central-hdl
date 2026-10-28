@@ -328,6 +328,25 @@ dialog .entrada-erro { margin-top: 12px; }
 .dlg-texto.aviso { margin-top: 12px; color: var(--ambar); font-size: 13px; }
 .codigo { margin-top: 14px; padding: 18px; border: 1px dashed var(--ciano-linha); border-radius: 12px; background: var(--ciano-fundo); color: var(--ciano-claro); font-size: 28px; font-weight: 700; letter-spacing: .12em; text-align: center; user-select: all; }
 
+/* ---------------------------------------------------------------- tags de acesso aos apps */
+.tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip-tag { font-size: 11px; letter-spacing: .04em; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--ciano-linha); background: var(--ciano-fundo); color: var(--ciano-claro); }
+.chip-tag.godmod { border-color: var(--ambar-linha); background: var(--tinta-ambar); color: var(--ambar); }
+.sem-tags { font-size: 12px; color: var(--texto-4); }
+.campo-tags { margin: 14px 0 0; padding: 0; border: 0; min-width: 0; }
+.campo-tags legend { padding: 0; margin-bottom: 6px; font-size: 12px; font-weight: 500; color: var(--texto-2); }
+.campo-tags legend small { font-weight: 400; color: var(--texto-3); }
+.caixas-tags { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.caixa-tag { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--linha); border-radius: 10px; background: var(--cartao-2); cursor: pointer; }
+.caixa-tag:hover { border-color: var(--linha-3); }
+.caixa-tag:has(input:checked) { border-color: var(--ciano-linha); background: var(--ciano-fundo); }
+.caixa-tag input { width: 16px; height: 16px; margin: 0; accent-color: var(--ciano); }
+.caixa-tag span { flex: 1; color: var(--texto); }
+.caixa-tag small { font-size: 11px; color: var(--texto-3); }
+.caixa-tag.godmod:has(input:checked) { border-color: var(--ambar-linha); background: var(--tinta-ambar); }
+.caixa-tag.godmod small { color: var(--ambar); }
+.caixa-tag.desabilitada { opacity: .5; cursor: not-allowed; }
+
 /* ---------------------------------------------------------------- botões */
 .btn { height: 44px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: 10px; background: var(--ciano); color: var(--tinta-ciano); font-weight: 700; white-space: nowrap; }
 .btn:hover:not(:disabled) { background: var(--ciano-hover); }

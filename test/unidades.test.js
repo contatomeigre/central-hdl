@@ -116,7 +116,7 @@ test('conta HDL: entrar, renovar, perfil e mensagens de erro', async () => {
 
   // perfil (account_status): só os campos usados, cor validada, situação e papel em português
   const p = await perfil(resposta(200, { id: 7, username: 'ana', displayName: 'Ana Lima', avatarColor: '#2f6f5e', status: 'active', hdlRole: 'admin', isAdmin: true }), cfg, 'a1');
-  assert.deepEqual(p, { id: 7, usuario: 'ana', nome: 'Ana Lima', cor: '#2f6f5e', situacao: 'ativa', papel: 'admin', admin: true });
+  assert.deepEqual(p, { id: 7, usuario: 'ana', nome: 'Ana Lima', cor: '#2f6f5e', situacao: 'ativa', papel: 'admin', admin: true, tags: [] });
   assert.match(chamadas.at(-1).url, /\/rest\/v1\/rpc\/account_status$/);
   assert.equal(chamadas.at(-1).init.headers.authorization, 'Bearer a1');
   const pendente = await perfil(resposta(200, { id: 8, username: 'bia', avatarColor: 'red;background:url(x)', status: 'pending', hdlRole: null, isAdmin: false }), cfg, 'a1');
@@ -239,4 +239,27 @@ test('registro em arquivo vira .old ao passar do limite', () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('tags de acesso: catálogo e perfil', async () => {
+  const base = { nome: 'Fluxo', repo: 'hdldev123/fluxo-releases', executavel: 'Fluxo.exe' };
+  const { apps, problemas } = validateCatalog({
+    apps: [
+      { ...base, id: 'fluxo', tag: 'fluxo' },
+      { ...base, id: 'livre' },                 // sem tag: livre para todos
+      { ...base, id: 'god', tag: 'godmod' },    // godmod não é tag de app
+      { ...base, id: 'maiuscula', tag: 'Fluxo' },
+      { ...base, id: 'curta', tag: 'f' },
+    ],
+  });
+  assert.deepEqual(apps.map((a) => a.id), ['fluxo', 'livre']);
+  assert.equal(problemas.length, 3);
+  assert.match(problemas[0], /god.*tag/);
+
+  const cfg = { url: 'https://exemplo.supabase.co', chave: 'pub' };
+  const resposta = (corpo) => async () => new Response(JSON.stringify(corpo), { status: 200 });
+  const p = await perfil(resposta({ id: 1, username: 'ana', status: 'active', hdlRole: 'admin', isAdmin: true, tags: ['fluxo', 'godmod', 'Inválida', 7] }), cfg, 't');
+  assert.deepEqual(p.tags, ['fluxo', 'godmod']);
+  const antigo = await perfil(resposta({ id: 2, username: 'bia', status: 'active' }), cfg, 't'); // banco sem a migração de tags
+  assert.deepEqual(antigo.tags, []);
 });

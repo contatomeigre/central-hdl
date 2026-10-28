@@ -95,6 +95,11 @@ function barraProgresso(a, compacto = false) {
 function botoes(a, { grande = false } = {}) {
   const p = grande ? '' : ' btn-p';
   const lista = [];
+  // sem acesso (perdeu a tag): só dá para desinstalar
+  if (a.semAcesso) {
+    if (a.instalada) lista.push(h('button', { type: 'button', class: 'icone-btn', title: 'Desinstalar', 'aria-label': `Desinstalar ${a.nome}`, onclick: () => desinstalar(a) }, ICONE.lixeira()));
+    return h('div', { class: 'botoes' }, lista);
+  }
   if (!a.instalada && a.ultima) lista.push(h('button', { type: 'button', class: `btn${p}`, onclick: () => instalar(a) }, 'Instalar'));
   if (a.atualizacao) lista.push(h('button', { type: 'button', class: `btn${p}`, onclick: () => instalar(a) }, 'Atualizar'));
   if (a.instalada) lista.push(h('button', { type: 'button', class: `btn${p}${a.atualizacao ? ' btn-sec' : ''}`, onclick: () => abrir(a) }, 'Abrir'));
@@ -103,6 +108,10 @@ function botoes(a, { grande = false } = {}) {
 }
 
 function estadoApp(a) {
+  if (a.semAcesso) {
+    return h('span', { class: 'estado neutro', title: 'Este app exige uma tag de acesso que a sua conta não tem. Peça a um administrador da HDL.' },
+      h('i', { class: 'ponto' }), 'Sem acesso');
+  }
   if (a.rodando) return h('span', { class: 'estado' }, h('i', { class: 'ponto pulsa' }), 'Aberto agora');
   if (a.atualizacao) return h('span', { class: 'estado ambar' }, h('i', { class: 'ponto ambar' }), 'Atualização disponível');
   if (a.instalada) return h('span', { class: 'estado' }, h('i', { class: 'ponto' }), 'Instalado');
@@ -285,7 +294,10 @@ const ehAdmin = (c) => Boolean(c.logado && c.situacao === 'ativa' && c.admin);
 
 function mostrarConta(c) {
   const eraAdmin = ehAdmin(conta);
+  // as tags decidem quais apps aparecem: mudou (login, saída ou um administrador mexeu), recarrega a lista
+  const tagsMudaram = (conta.tags ?? []).join() !== (c.tags ?? []).join() || conta.logado !== c.logado;
   conta = c;
+  if (tagsMudaram && bootTerminou) atualizarEstado();
   $('conta-card').hidden = !c.logado;
   if (c.logado) {
     $('conta-nome').textContent = c.nome;
@@ -431,7 +443,27 @@ $('situacao-sair').addEventListener('click', sairDaConta);
 // ------------------------------------------------------------ pessoas (administração)
 const PAPEIS = { owner: 'Proprietário', admin: 'Administrador', member: 'Membro', guest: 'Convidado' };
 const ESTADOS_CONVITE = { open: ['Em aberto', 'ciano'], accepted: ['Aceito', 'ok'], expired: ['Vencido', 'neutro'], revoked: ['Revogado', 'neutro'] };
-let pessoas = { pendentes: [], convites: [], erro: null, carregado: false };
+let pessoas = { pendentes: [], membros: [], convites: [], tags: [], erro: null, carregado: false };
+
+// ---- tags de acesso: cada app do catálogo pode exigir uma; godmod libera todos (só administradores)
+const chipTag = (t) => h('span', { class: `chip-tag mono${t === 'godmod' ? ' godmod' : ''}` }, t);
+const listaTags = (tags) => (tags?.length ? ` · acessos: ${tags.join(', ')}` : '');
+
+/** Caixas de marcar com as tags dos apps do catálogo (e as já dadas que saíram dele), mais o godmod. */
+function caixasDeTags(container, { marcadas = [], podeGodmod = false } = {}) {
+  const doCatalogo = pessoas.tags ?? [];
+  const avulsas = marcadas.filter((t) => t !== 'godmod' && !doCatalogo.some((o) => o.tag === t)).map((t) => ({ tag: t, nome: t }));
+  const itens = [...doCatalogo, ...avulsas].map((o) => h('label', { class: 'caixa-tag' },
+    h('input', { type: 'checkbox', value: o.tag, checked: marcadas.includes(o.tag) }),
+    h('span', {}, o.nome), h('small', { class: 'mono' }, o.tag)));
+  const god = h('label', { class: `caixa-tag godmod${podeGodmod ? '' : ' desabilitada'}`, title: podeGodmod ? 'Libera todos os apps' : 'Só para proprietários e administradores da HDL' },
+    h('input', { type: 'checkbox', value: 'godmod', checked: podeGodmod && marcadas.includes('godmod'), disabled: !podeGodmod }),
+    h('span', {}, 'Todos os apps'), h('small', { class: 'mono' }, 'godmod'));
+  container.replaceChildren(
+    ...(itens.length ? itens : [h('p', { class: 'dlg-texto' }, 'Nenhum app do catálogo exige tag ainda: todos são livres.')]),
+    god);
+}
+const tagsMarcadas = (container) => [...container.querySelectorAll('input:checked')].map((i) => i.value);
 
 async function atualizarPessoas() {
   if (!ehAdmin(conta)) return;
@@ -459,19 +491,29 @@ function renderPessoas() {
     h('div', { class: 'pessoa-txt' },
       h('b', {}, p.displayName),
       h('small', {}, `@${p.username} · ${p.email}`),
-      h('small', {}, `Convidado${p.invitedBy ? ` por ${p.invitedBy}` : ''} como ${PAPEIS[p.invitedRole] ?? 'Membro'} · conta criada em ${data(p.createdAt)}`)),
+      h('small', {}, `Convidado${p.invitedBy ? ` por ${p.invitedBy}` : ''} como ${PAPEIS[p.invitedRole] ?? 'Membro'}${listaTags(p.invitedTags)} · conta criada em ${data(p.createdAt)}`)),
     h('div', { class: 'botoes' },
       h('button', { type: 'button', class: 'btn btn-p', onclick: () => aprovar(p) }, 'Aprovar'),
       h('button', { type: 'button', class: 'btn btn-p btn-sec', onclick: () => recusar(p) }, 'Recusar'))));
   $('lista-pendentes').replaceChildren(...(pendentes.length ? pendentes
     : [h('p', { class: 'pessoas-vazio' }, pessoas.carregado ? 'Ninguém aguardando aprovação.' : 'Carregando…')]));
 
+  const membros = (pessoas.membros ?? []).map((m) => h('article', { class: 'pessoa' },
+    avatarDe(m.displayName, m.avatarColor),
+    h('div', { class: 'pessoa-txt' },
+      h('b', {}, m.displayName),
+      h('small', {}, `@${m.username} · ${PAPEIS[m.role] ?? m.role}`)),
+    h('div', { class: 'tags' }, m.tags?.length ? m.tags.map(chipTag) : h('small', { class: 'sem-tags' }, 'só apps livres')),
+    h('button', { type: 'button', class: 'btn btn-p btn-sec', onclick: () => editarAcessos(m) }, 'Acessos')));
+  $('lista-membros').replaceChildren(...(membros.length ? membros
+    : [h('p', { class: 'pessoas-vazio' }, pessoas.carregado ? 'Nenhum membro ativo.' : 'Carregando…')]));
+
   const convites = pessoas.convites.map((i) => {
     const [rotulo, cls] = ESTADOS_CONVITE[i.state] ?? [i.state, 'neutro'];
     return h('article', { class: 'pessoa convite' },
       h('div', { class: 'pessoa-txt' },
         h('b', {}, i.email),
-        h('small', {}, `${PAPEIS[i.role] ?? i.role} · criado por ${i.createdBy ?? '—'} em ${data(i.createdAt)}${i.state === 'open' ? ` · vale até ${data(i.expiresAt)}` : ''}`)),
+        h('small', {}, `${PAPEIS[i.role] ?? i.role}${listaTags(i.tags)} · criado por ${i.createdBy ?? '—'} em ${data(i.createdAt)}${i.state === 'open' ? ` · vale até ${data(i.expiresAt)}` : ''}`)),
       h('span', { class: `etiqueta-estado ${cls}` }, rotulo),
       i.state === 'open' ? h('button', { type: 'button', class: 'btn btn-p btn-sec', onclick: () => revogar(i) }, 'Revogar') : null);
   });
@@ -497,7 +539,32 @@ const revogar = (i) => executar(async () => {
   await atualizarPessoas();
 });
 
+let membroEditado = null;
+function editarAcessos(m) {
+  membroEditado = m;
+  const admin = m.role === 'owner' || m.role === 'admin';
+  $('acessos-titulo').textContent = `Acessos de ${m.displayName}`;
+  $('acessos-texto').textContent = `@${m.username} · ${PAPEIS[m.role] ?? m.role}. Marque os apps que ${m.displayName.split(/\s+/)[0]} pode usar; apps sem tag são livres para todos.${admin ? '' : ' Todos os apps (godmod) é só para administradores.'}`;
+  caixasDeTags($('acessos-tags'), { marcadas: m.tags ?? [], podeGodmod: admin });
+  erroCampo('acessos-erro', '');
+  $('dlg-acessos').showModal();
+}
+$('acessos-cancelar').addEventListener('click', () => $('dlg-acessos').close());
+$('form-acessos').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const m = membroEditado;
+  enviando($('acessos-salvar'), 'Salvando…', 'acessos-erro', async () => {
+    const { tags } = await api.definirTags(m.id, tagsMarcadas($('acessos-tags')));
+    $('dlg-acessos').close();
+    toast(tags.length ? `${m.displayName}: ${tags.join(', ')}.` : `${m.displayName} ficou só com os apps livres.`);
+    // mexeu nas próprias tags: a lista de apps desta Central muda na hora
+    if (m.id === conta.id) mostrarConta(await api.verificarConta());
+    await atualizarPessoas();
+  });
+});
+
 let mensagemConvite = '';
+const tagsDoConvite = () => caixasDeTags($('convite-tags'), { marcadas: tagsMarcadas($('convite-tags')), podeGodmod: $('convite-papel').value === 'admin' });
 $('btn-convidar').addEventListener('click', () => {
   $('form-convite').hidden = false;
   $('convite-pronto').hidden = true;
@@ -506,17 +573,19 @@ $('btn-convidar').addEventListener('click', () => {
   // só o proprietário pode convidar administradores (o banco também confere)
   const opAdmin = $('convite-papel').querySelector('[value="admin"]');
   opAdmin.hidden = opAdmin.disabled = conta.papel !== 'owner';
+  caixasDeTags($('convite-tags'));
   erroCampo('convite-erro', '');
   $('dlg-convite').showModal();
   $('convite-email').focus();
 });
+$('convite-papel').addEventListener('change', tagsDoConvite);
 $('convite-cancelar').addEventListener('click', () => $('dlg-convite').close());
 $('form-convite').addEventListener('submit', (e) => {
   e.preventDefault();
   enviando($('convite-gerar'), 'Gerando…', 'convite-erro', async () => {
-    const { invite, code } = await api.convidar($('convite-email').value, $('convite-papel').value);
+    const { invite, code } = await api.convidar($('convite-email').value, $('convite-papel').value, tagsMarcadas($('convite-tags')));
     const validade = data(invite.expiresAt);
-    $('convite-para').textContent = `Para ${invite.email}, como ${PAPEIS[invite.role] ?? invite.role}. Vale até ${validade} e só pode ser usado uma vez.`;
+    $('convite-para').textContent = `Para ${invite.email}, como ${PAPEIS[invite.role] ?? invite.role}${listaTags(invite.tags)}. Vale até ${validade} e só pode ser usado uma vez.`;
     $('convite-codigo').textContent = code;
     mensagemConvite = [
       'Você foi convidado para a Central HDL, a plataforma de aplicativos da HDL.',

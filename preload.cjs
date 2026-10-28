@@ -27,7 +27,8 @@ contextBridge.exposeInMainWorld('central', {
   verificarConta: () => call('verificar-conta'),
   /** Administração da Conta HDL (o banco confere se a pessoa é proprietária ou administradora). */
   pessoas: () => call('pessoas'),
-  convidar: (email, papel) => call('convidar', email, papel),
+  convidar: (email, papel, tags) => call('convidar', email, papel, tags),
+  definirTags: (id, tags) => call('definir-tags', id, tags),
   revogarConvite: (id) => call('revogar-convite', id),
   aprovar: (id) => call('aprovar', id),
   recusar: (id) => call('recusar', id),
