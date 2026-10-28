@@ -521,7 +521,7 @@ $('form-convite').addEventListener('submit', (e) => {
     mensagemConvite = [
       'Você foi convidado para a Central HDL, a plataforma de aplicativos da HDL.',
       '',
-      '1. Baixe e instale a Central: https://github.com/contatomeigre/central-hdl/releases/latest',
+      '1. Baixe e instale a Central: https://github.com/hdldev123/central-hdl/releases/latest',
       '2. Abra a Central e clique em "Criar minha conta".',
       `3. Use o e-mail ${invite.email} e o código ${code}.`,
       '',

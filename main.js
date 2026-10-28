@@ -18,7 +18,7 @@ import { entrar, renovar, sair, perfil, cadastrar, rpc } from './lib/conta.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'icone.png');
-const CATALOG_URL = 'https://raw.githubusercontent.com/contatomeigre/central-hdl/main/catalogo.json';
+const CATALOG_URL = 'https://raw.githubusercontent.com/hdldev123/central-hdl/main/catalogo.json';
 const CHECK_EVERY_MS = 30 * 60 * 1000;
 const CATALOG_TIMEOUT_MS = 30 * 1000;
 const CATALOG_TTL_MS = 5 * 60 * 1000; // o raw.githubusercontent também guarda cache por uns 5 min
