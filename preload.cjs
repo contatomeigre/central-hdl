@@ -8,7 +8,8 @@ const call = async (channel, ...args) => {
 };
 
 contextBridge.exposeInMainWorld('central', {
-  estado: () => call('estado'),
+  /** atualizar: relê o catálogo do GitHub em vez da cópia em memória. */
+  estado: (opts) => call('estado', opts),
   instalar: (id, opts) => call('instalar', id, opts),
   abrir: (id) => call('abrir', id),
   desinstalar: (id) => call('desinstalar', id),
@@ -17,9 +18,23 @@ contextBridge.exposeInMainWorld('central', {
   info: () => call('central'),
   verificarCentral: () => call('verificar-central'),
   reiniciar: () => call('reiniciar-central'),
-  /** Eventos: estado, progresso, ocupado, abrindo, central-status. */
+  abrirRegistros: () => call('abrir-registros'),
+  /** Conta HDL: a interface recebe só nome, usuário e cor; os tokens ficam no processo principal. */
+  conta: () => call('conta'),
+  entrar: (email, senha) => call('entrar', email, senha),
+  sair: () => call('sair-conta'),
+  cadastrar: (dados) => call('cadastrar', dados),
+  verificarConta: () => call('verificar-conta'),
+  /** Administração da Conta HDL (o banco confere se a pessoa é proprietária ou administradora). */
+  pessoas: () => call('pessoas'),
+  convidar: (email, papel) => call('convidar', email, papel),
+  revogarConvite: (id) => call('revogar-convite', id),
+  aprovar: (id) => call('aprovar', id),
+  recusar: (id) => call('recusar', id),
+  copiar: (texto) => call('copiar', texto),
+  /** Eventos: estado, progresso, ocupado, abrindo, central-status, conta. */
   on: (event, fn) => {
-    if (!['estado', 'progresso', 'ocupado', 'abrindo', 'central-status'].includes(event)) return;
+    if (!['estado', 'progresso', 'ocupado', 'abrindo', 'central-status', 'conta'].includes(event)) return;
     ipcRenderer.on(event, (_e, payload) => fn(payload));
   },
 });

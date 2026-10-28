@@ -1,7 +1,7 @@
 {
   "name": "central-hdl",
   "productName": "Central HDL",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Central HDL — loja de aplicativos desktop da HDL Soluções: instala e mantém atualizados os programas da empresa.",
   "author": "Matheus Meigre",
   "type": "module",
@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node scripts/abrir.mjs",
     "icone": "node scripts/gerar-icone.mjs",
-    "test": "node --test \"test/**/*.test.js\"",
+    "test": "node --test",
     "dist": "electron-builder --win nsis --publish never",
     "publicar": "node scripts/publicar.mjs"
   },

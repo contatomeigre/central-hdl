@@ -254,6 +254,80 @@ svg { flex: none; }
 .link-btn.destaque { padding: 8px 12px; border-radius: 8px; background: var(--ciano); color: var(--tinta-ciano); font-weight: 700; }
 .link-btn.destaque:hover { background: var(--ciano-hover); color: var(--tinta-ciano); text-decoration: none; }
 
+.conta-card { display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 12px; border: 1px solid var(--linha-suave); border-radius: 12px; background: var(--cartao); }
+.avatar { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; background: #1a3a6b; color: var(--texto-forte); font-family: var(--display); font-weight: 700; font-size: 13px; }
+.conta-txt { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.conta-txt b, .conta-txt small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conta-txt b { font-size: 13px; font-weight: 600; color: var(--texto-forte); }
+.conta-txt small { font-size: 11px; color: var(--texto-3); }
+.conta-txt small.ambar { color: var(--ambar); }
+.conta-card .icone-btn { width: 32px; height: 32px; }
+
+/* ---------------------------------------------------------------- tela de entrada */
+.entrada {
+  position: fixed; inset: 0; z-index: 40; overflow-y: auto;
+  display: flex; align-items: center; justify-content: center; padding: 88px 24px;
+  background-color: var(--fundo);
+  background-image: linear-gradient(rgba(61, 214, 245, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(61, 214, 245, .045) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.entrada-caixa { width: min(420px, 100%); margin: auto; display: flex; flex-direction: column; gap: 16px; padding: 32px; border: 1px solid var(--linha); border-radius: 16px; background: rgba(13, 18, 25, .92); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); animation: entra .3s ease-out both; }
+.entrada-cab { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.entrada-cab h1 { font-size: 28px; font-weight: 700; letter-spacing: -.02em; }
+.entrada-cab p { margin: 0; color: var(--texto-2); }
+.campo { display: flex; flex-direction: column; gap: 6px; }
+.campo span { font-size: 12px; font-weight: 500; color: var(--texto-2); }
+.campo input { height: 44px; padding: 0 14px; border: 1px solid var(--linha); border-radius: 10px; background: var(--cartao); color: var(--texto); font: inherit; outline: none; }
+.campo input:focus { border-color: var(--ciano); }
+.entrada-erro { margin: 0; padding: 10px 12px; border: 1px solid var(--perigo-linha); border-radius: 10px; color: var(--perigo); font-size: 13px; }
+.entrada-caixa .btn { width: 100%; }
+.entrada-caixa .btn:disabled { opacity: .7; }
+.entrada-ajuda { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--linha-suave); font-size: 13px; color: var(--texto-3); }
+.entrada-ajuda p { margin: 0; }
+.link-btn.inline { display: inline; font-size: inherit; }
+.campos-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.campo span small { font-size: 11px; font-weight: 400; color: var(--texto-3); }
+.campo select { height: 44px; padding: 0 12px; border: 1px solid var(--linha); border-radius: 10px; background: var(--cartao); color: var(--texto); font: inherit; outline: none; }
+.campo select:focus { border-color: var(--ciano); }
+.form-largo { width: min(520px, 100%); }
+.situacao-icone { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; border: 1px solid var(--ambar-linha); background: var(--tinta-ambar); }
+.situacao-icone svg { width: 26px; height: 26px; fill: none; stroke: var(--ambar); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.situacao-icone.perigo { border-color: var(--perigo-linha); background: #1a0b09; }
+.situacao-icone.perigo svg { stroke: var(--perigo); }
+/* janela baixa (a Central abre com 720 px): compacta para o formulário caber entre topo e rodapé */
+@media (max-height: 800px) {
+  .entrada { padding: 72px 24px; }
+  .entrada-caixa { gap: 12px; padding: 24px 28px; }
+  .entrada-caixa > .logo { display: none; }
+  .entrada-cab h1 { font-size: 24px; }
+  .entrada-ajuda { padding-top: 10px; gap: 6px; }
+  #form-cadastro .entrada-cab p { display: none; }
+}
+
+/* ---------------------------------------------------------------- pessoas (administração) */
+.pessoas { display: flex; flex-direction: column; gap: 14px; }
+.pessoas-acoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 18px 20px; border: 1px solid var(--linha); border-radius: 14px; background: var(--cartao); }
+.pessoas-acoes p { margin: 0; flex: 1 1 320px; color: var(--texto-2); }
+.pessoas .rotulo { margin-top: 10px; }
+.lista-pessoas { display: flex; flex-direction: column; gap: 10px; }
+.pessoa { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 18px; border: 1px solid var(--linha); border-radius: 12px; background: var(--cartao); }
+.pessoa .avatar { width: 40px; height: 40px; font-size: 14px; }
+.pessoa-txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0; }
+.pessoa-txt b { color: var(--texto-forte); font-weight: 600; }
+.pessoa-txt small { color: var(--texto-3); font-size: 12px; overflow-wrap: anywhere; }
+.pessoa.convite { padding: 12px 18px; }
+.etiqueta-estado { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--linha-2); color: var(--texto-3); text-transform: uppercase; }
+.etiqueta-estado.ciano { border-color: var(--ciano-linha); color: var(--ciano-claro); }
+.etiqueta-estado.ok { border-color: var(--ciano-linha); color: var(--ciano); background: var(--ciano-fundo); }
+.pessoas-vazio { margin: 0; padding: 18px 20px; border: 1px dashed #243042; border-radius: 12px; color: var(--texto-3); }
+
+/* ---------------------------------------------------------------- convite */
+dialog .campo { margin-top: 12px; }
+dialog .entrada-erro { margin-top: 12px; }
+.dlg-texto { margin: 0 0 4px; color: var(--texto-2); }
+.dlg-texto.aviso { margin-top: 12px; color: var(--ambar); font-size: 13px; }
+.codigo { margin-top: 14px; padding: 18px; border: 1px dashed var(--ciano-linha); border-radius: 12px; background: var(--ciano-fundo); color: var(--ciano-claro); font-size: 28px; font-weight: 700; letter-spacing: .12em; text-align: center; user-select: all; }
+
 /* ---------------------------------------------------------------- botões */
 .btn { height: 44px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: 10px; background: var(--ciano); color: var(--tinta-ciano); font-weight: 700; white-space: nowrap; }
 .btn:hover:not(:disabled) { background: var(--ciano-hover); }
@@ -366,7 +440,8 @@ dialog h2 { font-size: 24px; margin: 6px 0 10px; }
 .alternador input::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--texto-3); transition: transform .15s, background .15s; }
 .alternador input:checked { background: var(--ciano-fundo); border-color: var(--ciano); }
 .alternador input:checked::after { transform: translateX(16px); background: var(--ciano); }
-.dlg-rodape { display: flex; justify-content: flex-end; padding-top: 18px; }
+.dlg-rodape { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-top: 18px; }
+.dlg-rodape .link-btn { align-self: center; }
 
 /* ---------------------------------------------------------------- avisos */
 #toasts { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; z-index: 60; width: max-content; max-width: calc(100vw - 32px); }
