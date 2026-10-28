@@ -60,25 +60,36 @@ function iconeApp(a, grande = false) {
   return img;
 }
 
+/** Porcentagem baixada, ou null quando não há como medir (barra indeterminada). */
+function porcentagem(a) {
+  const p = progresso.get(a.id);
+  return a.ocupado === 'baixando' && p?.total ? Math.round((p.got / p.total) * 100) : null;
+}
+
+/** Ajusta a barra e o texto de progresso já desenhados, sem recriar o cartão. */
+function pintarProgresso(el, a) {
+  const pct = porcentagem(a);
+  const alvo = a.ocupado !== 'desinstalando' && a.ultima?.versao ? ` ${a.ultima.versao}` : '';
+  const rotulo = { preparando: 'PREPARANDO', baixando: 'BAIXANDO', instalando: 'INSTALANDO', desinstalando: 'DESINSTALANDO' }[a.ocupado];
+  el.querySelector('.progresso-linha span').textContent = `${rotulo}${alvo}…`;
+  const numero = el.querySelector('.progresso-linha b');
+  numero.hidden = pct === null;
+  numero.firstChild.nodeValue = String(pct ?? 0);
+  const barra = el.querySelector('.barra');
+  if (pct === null) barra.removeAttribute('aria-valuenow'); else barra.setAttribute('aria-valuenow', String(pct));
+  const preenchido = barra.firstElementChild;
+  preenchido.classList.toggle('indeterminada', pct === null);
+  preenchido.style.width = pct === null ? '' : `${pct}%`;
+}
+
 /** Barra de progresso de download/instalação, ou null se o app está livre. */
 function barraProgresso(a, compacto = false) {
   if (!a.ocupado) return null;
-  const p = progresso.get(a.id);
-  const pct = a.ocupado === 'baixando' && p?.total ? Math.round((p.got / p.total) * 100) : null;
-  const alvo = a.ultima?.versao ? ` ${a.ultima.versao}` : '';
-  const rotulo = {
-    baixando: `BAIXANDO${alvo}…`,
-    instalando: `INSTALANDO${alvo}…`,
-    desinstalando: 'DESINSTALANDO…',
-  }[a.ocupado];
-  const preenchido = h('span', { class: pct === null ? 'indeterminada' : '' });
-  if (pct !== null) preenchido.style.width = `${pct}%`;
-  return h('div', { class: `progresso${compacto ? ' compacto' : ''}` },
-    h('div', { class: 'progresso-linha' }, h('span', {}, rotulo), pct === null ? null : h('b', {}, String(pct), h('em', {}, '%'))),
-    h('div', {
-      class: 'barra', role: 'progressbar', 'aria-label': `Progresso de ${a.nome}`,
-      'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': pct === null ? null : String(pct),
-    }, preenchido));
+  const el = h('div', { class: `progresso${compacto ? ' compacto' : ''}` },
+    h('div', { class: 'progresso-linha' }, h('span'), h('b', {}, '0', h('em', {}, '%'))),
+    h('div', { class: 'barra', role: 'progressbar', 'aria-label': `Progresso de ${a.nome}`, 'aria-valuemin': '0', 'aria-valuemax': '100' }, h('span')));
+  pintarProgresso(el, a);
+  return el;
 }
 
 function botoes(a, { grande = false } = {}) {
@@ -101,7 +112,7 @@ function estadoApp(a) {
 
 function cartao(a) {
   const versao = a.instalada ?? a.ultima?.versao;
-  return h('article', { class: `app${a.atualizacao ? ' tem-atualizacao' : ''}` },
+  return h('article', { class: `app${a.atualizacao ? ' tem-atualizacao' : ''}`, 'data-id': a.id },
     h('div', { class: 'app-cab' }, iconeApp(a),
       h('div', {}, h('h3', {}, a.nome), h('small', {}, a.categoria)),
       versao ? h('span', { class: 'v' }, `v${versao}`) : null),
@@ -117,7 +128,7 @@ function destaque(a) {
   const novidades = a.ultima?.notas
     ? h('a', { href: a.ultima.notas, target: '_blank' }, `Novidades${a.ultima.data ? ` de ${data(a.ultima.data)}` : ''} →`)
     : null;
-  return h('section', { class: 'destaque', 'aria-label': `Atualização do ${a.nome}` },
+  return h('section', { class: 'destaque', 'aria-label': `Atualização do ${a.nome}`, 'data-id': a.id },
     h('div', { class: 'destaque-info' }, iconeApp(a, true),
       h('div', { class: 'destaque-txt' },
         h('div', { class: 'destaque-tit' },
@@ -207,10 +218,11 @@ function render() {
   $('lista').replaceChildren(...cartoes);
 }
 
-async function atualizarEstado() {
+/** atualizar: relê o catálogo do GitHub (botão "Procurar atualizações"). */
+async function atualizarEstado({ atualizar = false } = {}) {
   $('verificar').disabled = true;
   try {
-    apps = await api.estado();
+    apps = await api.estado({ atualizar });
     render();
   } catch (err) {
     toast(err.message, 'erro');
@@ -250,7 +262,10 @@ api.on('estado', (lista) => { apps = lista; render(); });
 api.on('progresso', ({ id, got, total }) => {
   progresso.set(id, { got, total });
   const a = apps.find((x) => x.id === id);
-  if (a) { a.ocupado = 'baixando'; render(); }
+  if (!a) return;
+  if (a.ocupado !== 'baixando') { a.ocupado = 'baixando'; render(); return; }
+  // chega a cada 150 ms: só a barra muda, sem recriar a lista (que tiraria o foco dos botões)
+  for (const el of document.querySelectorAll(`[data-id="${CSS.escape(id)}"] .progresso`)) pintarProgresso(el, a);
 });
 api.on('ocupado', ({ id, status }) => {
   const a = apps.find((x) => x.id === id);
@@ -586,7 +601,7 @@ document.addEventListener('keydown', (e) => {
     $('busca').select();
   }
 });
-$('verificar').addEventListener('click', () => { atualizarEstado(); verificarCentral({ avisar: false }); });
+$('verificar').addEventListener('click', () => { atualizarEstado({ atualizar: true }); verificarCentral({ avisar: false }); });
 $('central-atualizar').addEventListener('click', () => {
   if ($('central-atualizar').classList.contains('destaque')) reiniciarCentral();
   else verificarCentral();
@@ -602,6 +617,7 @@ $('abrir-config').addEventListener('click', async () => {
   $('cfg-login').checked = cfg.iniciarComWindows;
   $('config').showModal();
 });
+$('abrir-registros').addEventListener('click', () => executar(() => api.abrirRegistros()));
 for (const id of ['cfg-auto', 'cfg-login']) {
   $(id).addEventListener('change', () => executar(() => api.salvarConfig({ atualizarSozinho: $('cfg-auto').checked, iniciarComWindows: $('cfg-login').checked })));
 }
