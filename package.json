@@ -1,7 +1,7 @@
 {
   "name": "central-hdl",
   "productName": "Central HDL",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Central HDL — loja de aplicativos desktop da HDL Soluções: instala e mantém atualizados os programas da empresa.",
   "author": "Matheus Meigre",
   "type": "module",
@@ -43,7 +43,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "contatomeigre",
+        "owner": "hdldev123",
         "repo": "central-hdl",
         "releaseType": "release"
       }

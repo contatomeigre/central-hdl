@@ -18,7 +18,7 @@ instala em silêncio (/S) e reabre o app, se ele estava aberto
 - **Visual escuro de terminal**: barra lateral com Todos os apps, Instalados e Atualizações; apps com versão nova aparecem num painel de destaque com o progresso do download. Busca com `Ctrl K`. As fontes (Space Grotesk, JetBrains Mono e Inter, licença OFL) vão embutidas em `ui/fonts`, porque a política de segurança da janela não carrega nada de fora.
 - **Fica na bandeja** e inicia com o Windows (dá para desligar nas configurações).
 - A cada 30 min procura versões novas. Com "Atualizar apps automaticamente" ligado (o padrão), ela instala sozinha. **Apps abertos não são interrompidos**: a pessoa recebe uma notificação e atualiza quando quiser. Se o app estiver aberto, ele é fechado e reaberto.
-- Ela **se atualiza sozinha** pelo repositório `contatomeigre/central-hdl`: procura ao abrir e a cada 2 h, baixa em segundo plano e instala ao fechar. Ao lado da versão, no topo, o botão **Procurar atualização da Central** força a verificação e, com a versão nova baixada, vira **Reiniciar e atualizar**. "Procurar atualizações" e o menu da bandeja também verificam a Central.
+- Ela **se atualiza sozinha** pelo repositório `hdldev123/central-hdl`: procura ao abrir e a cada 2 h, baixa em segundo plano e instala ao fechar. Ao lado da versão, no topo, o botão **Procurar atualização da Central** força a verificação e, com a versão nova baixada, vira **Reiniciar e atualizar**. "Procurar atualizações" e o menu da bandeja também verificam a Central.
 - O próprio Prosa também se atualiza ao abrir (electron-updater). Quem não tem a Central continua recebendo as versões novas.
 - Para saber o que está instalado, ela lê "Aplicativos instalados" do Windows (registro `Uninstall`), procurando pelo nome em `nomeWindows`.
 
@@ -45,10 +45,13 @@ Conta pendente ou recusada não acessa nada no Prosa: as regras do banco só rec
 
 ## Onde fica cada coisa
 
-Tudo fica na conta **`contatomeigre`** do GitHub, em repositórios **públicos** que guardam só as versões. O código do Prosa não vai para lá.
+Tudo fica na conta da empresa no GitHub, **`hdldev123`** (a mesma do Luz de Minas e do Rotas):
 
-- `contatomeigre/central-hdl`: este projeto (com `catalogo.json` e `icones/` na branch `main`) e as versões da própria Central.
-- `contatomeigre/prosa-releases`: só as versões do Prosa.
+- `hdldev123/central-hdl` (público): este projeto (com `catalogo.json` e `icones/` na branch `main`) e as versões da própria Central.
+- `hdldev123/prosa-releases` (público): só as versões do Prosa.
+- `hdldev123/hello-prosa` (privado): o código do Prosa e o banco (migrações do Supabase).
+
+Até outubro de 2026 os três ficavam na conta pessoal `contatomeigre` e foram **transferidos** (não copiados) para a `hdldev123`. O GitHub redireciona os endereços antigos, e é isso que mantém funcionando as Centrais e os Prosas instalados antes da troca. Para não quebrar esse redirecionamento: **não crie repositórios com esses nomes na `contatomeigre` e não apague nem renomeie essa conta.**
 
 ## Publicar uma versão nova do Prosa
 
@@ -60,13 +63,13 @@ npm run publicar
 
 O `npm run publicar` (`desktop/scripts/publicar.mjs`):
 
-1. pega o token da conta `contatomeigre` no GitHub CLI, sem precisar criar ou colar token;
+1. pega o token da conta dona (`hdldev123`) no GitHub CLI, sem precisar criar ou colar token. O script do Prosa ainda não aceita colaboradoras: para publicar o Prosa, entre no `gh` com a `hdldev123`;
 2. cria a release `v0.3.2` em `prosa-releases` (feito antes, porque o electron-builder sozinho às vezes falha na primeira publicação);
 3. gera o instalador e envia o `.exe`, o `.blockmap` e o `latest.yml`.
 
-Em até 30 min as Centrais (e os Prosas abertos) encontram a versão nova. Se o GitHub CLI pedir login: `gh auth login --web` com a conta `contatomeigre` (veja o login com conta secundária abaixo).
+Em até 30 min as Centrais (e os Prosas abertos) encontram a versão nova. Se o GitHub CLI pedir login: `gh auth login --web` com a conta `hdldev123` (veja o login com conta secundária abaixo).
 
-Para conferir uma versão publicada: `https://github.com/contatomeigre/prosa-releases/releases/latest/download/latest.yml`.
+Para conferir uma versão publicada: `https://github.com/hdldev123/prosa-releases/releases/latest/download/latest.yml`.
 
 > As releases são criadas como **publicadas** (`releaseType: release`). Para revisar antes, troque para `"draft"` no `package.json` e publique a release manualmente no GitHub.
 
@@ -79,7 +82,7 @@ git commit -am "Central HDL x.y.z"; git push
 npm run publicar
 ```
 
-Quem pode publicar: a conta `contatomeigre` ou qualquer colaboradora com permissão de **escrita** no repositório (hoje `hdldev123` e `davydsonmr1`), logada no GitHub CLI com `gh auth login --web`. O script tenta primeiro a `contatomeigre` e depois a conta ativa do `gh`, e mostra com qual conta está publicando. Para dar acesso a mais alguém: **Settings → Collaborators** do repositório, com o papel *Write*.
+Quem pode publicar: a conta dona (`hdldev123`) ou qualquer colaboradora com permissão de **escrita** no repositório (ex.: `davydsonmr1`), logada no GitHub CLI com `gh auth login --web`. O script tenta primeiro a `hdldev123` e depois a conta ativa do `gh`, e mostra com qual conta está publicando. Para dar acesso a mais alguém: **Settings → Collaborators** do repositório, com o papel *Write*.
 
 O `npm run publicar` recusa publicar quando:
 
@@ -88,20 +91,20 @@ O `npm run publicar` recusa publicar quando:
 - a versão já foi publicada (a release já tem o `latest.yml`). Quem já tem essa versão nunca receberia a correção: suba a versão. Se uma publicação anterior foi interrompida antes do `latest.yml` subir, ela é retomada.
 
 A **primeira** instalação é a única feita à mão: envie para as pessoas o `Central-HDL-Setup-x.y.z.exe`, que fica na release do repositório `central-hdl`. O link fixo da última versão é:
-`https://github.com/contatomeigre/central-hdl/releases/latest`
+`https://github.com/hdldev123/central-hdl/releases/latest`
 
 ## Login com a conta secundária no GitHub CLI
 
 Colaboradores publicam com a própria conta: basta `gh auth login --web` no navegador de sempre. O passo abaixo é só para quem precisa logar numa conta diferente da que está aberta no navegador.
 
-Esta máquina tem uma variável `GITHUB_TOKEN` com o token do `matheusmeigre`, que tem prioridade sobre as contas do `gh`. Para logar na `contatomeigre`:
+Se a máquina tiver uma variável `GITHUB_TOKEN` com o token de outra conta, ela tem prioridade sobre as contas do `gh`. Para logar na `hdldev123` (por exemplo, para publicar o Prosa):
 
 ```powershell
 $env:GITHUB_TOKEN = $null
 gh auth login --hostname github.com --git-protocol https --web
 ```
 
-Copie o código e aperte Enter; feche a aba que abrir no navegador normal. Depois, numa **janela anônima** logada na `contatomeigre`, abra https://github.com/login/device e cole o código. O script de publicação já ignora o `GITHUB_TOKEN` sozinho.
+Copie o código e aperte Enter; feche a aba que abrir no navegador normal. Depois, numa **janela anônima** logada na `hdldev123`, abra https://github.com/login/device e cole o código. O script de publicação já ignora o `GITHUB_TOKEN` sozinho.
 
 ## Colocar mais um programa da empresa na Central
 
@@ -113,10 +116,10 @@ Copie o código e aperte Enter; feche a aba que abrir no navegador normal. Depoi
      "nome": "Meu App",
      "descricao": "O que ele faz, em uma frase.",
      "categoria": "Financeiro",
-     "repo": "contatomeigre/meu-app-releases",
+     "repo": "hdldev123/meu-app-releases",
      "nomeWindows": "Meu App",
      "executavel": "Meu App.exe",
-     "icone": "https://raw.githubusercontent.com/contatomeigre/central-hdl/main/icones/meu-app.png"
+     "icone": "https://raw.githubusercontent.com/hdldev123/central-hdl/main/icones/meu-app.png"
    }
    ```
    - `nomeWindows` é o nome que aparece em "Aplicativos instalados" (sem a versão), normalmente o `productName`.

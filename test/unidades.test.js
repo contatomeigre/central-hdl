@@ -201,7 +201,7 @@ test('latest.yml sem resposta desiste no prazo', async () => {
 });
 
 test('catálogo: entradas inválidas são descartadas sem derrubar as outras', () => {
-  const ok = { id: 'prosa', nome: 'Prosa', repo: 'contatomeigre/prosa-releases', executavel: 'Prosa.exe', icone: 'https://x/p.png' };
+  const ok = { id: 'prosa', nome: 'Prosa', repo: 'hdldev123/prosa-releases', executavel: 'Prosa.exe', icone: 'https://x/p.png' };
   const { apps, problemas } = validateCatalog({
     apps: [
       ok,
