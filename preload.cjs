@@ -32,9 +32,9 @@ contextBridge.exposeInMainWorld('central', {
   aprovar: (id) => call('aprovar', id),
   recusar: (id) => call('recusar', id),
   copiar: (texto) => call('copiar', texto),
-  /** Eventos: estado, progresso, ocupado, central-status, conta. */
+  /** Eventos: estado, progresso, ocupado, abrindo, central-status, conta. */
   on: (event, fn) => {
-    if (!['estado', 'progresso', 'ocupado', 'central-status', 'conta'].includes(event)) return;
+    if (!['estado', 'progresso', 'ocupado', 'abrindo', 'central-status', 'conta'].includes(event)) return;
     ipcRenderer.on(event, (_e, payload) => fn(payload));
   },
 });
