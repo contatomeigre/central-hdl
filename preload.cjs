@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld('central', {
   revogarConvite: (id) => call('revogar-convite', id),
   aprovar: (id) => call('aprovar', id),
   recusar: (id) => call('recusar', id),
+  definirCargo: (id, papel) => call('definir-cargo', id, papel),
+  removerMembro: (id) => call('remover-membro', id),
+  reativar: (id, papel) => call('reativar', id, papel),
+  regraApp: (appId, restrito) => call('regra-app', appId, restrito),
+  acessoApp: (appId, ids) => call('acesso-app', appId, ids),
   copiar: (texto) => call('copiar', texto),
   /** Eventos: estado, progresso, ocupado, abrindo, central-status, conta. */
   on: (event, fn) => {

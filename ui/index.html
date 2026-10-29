@@ -189,20 +189,43 @@
       </section>
 
       <section id="pessoas" class="pessoas" aria-label="Pessoas" hidden>
-        <div class="pessoas-acoes">
-          <p>Convide pelo e-mail. A pessoa cria a conta na Central com o código do convite e fica aguardando até você aprovar.</p>
-          <button id="btn-convidar" class="btn" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            Convidar pessoa
-          </button>
+        <div class="subabas" role="tablist" aria-label="Administração">
+          <button type="button" role="tab" id="aba-pessoas" data-pessoas-aba="pessoas" aria-controls="painel-pessoas" aria-selected="true">Pessoas<small id="n-pendentes-aba" class="selo mono" hidden></small></button>
+          <button type="button" role="tab" id="aba-apps" data-pessoas-aba="apps" aria-controls="painel-apps" aria-selected="false" tabindex="-1">Apps</button>
+          <button type="button" role="tab" id="aba-convites" data-pessoas-aba="convites" aria-controls="painel-convites" aria-selected="false" tabindex="-1">Convites</button>
+          <button type="button" role="tab" id="aba-inativas" data-pessoas-aba="inativas" aria-controls="painel-inativas" aria-selected="false" tabindex="-1">Inativas</button>
         </div>
         <p id="pessoas-erro" class="entrada-erro" role="alert" hidden></p>
-        <h2 class="mono rotulo">AGUARDANDO APROVAÇÃO</h2>
-        <div id="lista-pendentes" class="lista-pessoas"></div>
-        <h2 class="mono rotulo">MEMBROS E ACESSOS AOS APPS</h2>
-        <div id="lista-membros" class="lista-pessoas"></div>
-        <h2 class="mono rotulo">CONVITES DOS ÚLTIMOS 30 DIAS</h2>
-        <div id="lista-convites" class="lista-pessoas"></div>
+        <p id="pessoas-aviso" class="aviso-ok" role="status" hidden></p>
+
+        <div id="painel-pessoas" class="painel-pessoas" role="tabpanel" aria-labelledby="aba-pessoas">
+          <h2 class="mono rotulo">AGUARDANDO APROVAÇÃO</h2>
+          <div id="lista-pendentes" class="lista-pessoas"></div>
+          <h2 class="mono rotulo">MEMBROS</h2>
+          <div id="lista-membros" class="lista-pessoas"></div>
+        </div>
+
+        <div id="painel-apps" class="painel-pessoas" role="tabpanel" aria-labelledby="aba-apps" hidden>
+          <p class="pessoas-intro">Cada app é livre para todos ou restrito a quem você marcar. A regra vale também para os apps, que conferem de novo no banco.</p>
+          <div id="lista-apps" class="lista-pessoas"></div>
+        </div>
+
+        <div id="painel-convites" class="painel-pessoas" role="tabpanel" aria-labelledby="aba-convites" hidden>
+          <div class="pessoas-acoes">
+            <p>Convide pelo e-mail. A pessoa cria a conta na Central com o código do convite e fica aguardando até você aprovar.</p>
+            <button id="btn-convidar" class="btn" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Novo convite
+            </button>
+          </div>
+          <h2 class="mono rotulo">CONVITES DOS ÚLTIMOS 30 DIAS</h2>
+          <div id="lista-convites" class="lista-pessoas"></div>
+        </div>
+
+        <div id="painel-inativas" class="painel-pessoas" role="tabpanel" aria-labelledby="aba-inativas" hidden>
+          <p class="pessoas-intro">Contas removidas ou recusadas. Reativar devolve a conta à HDL com o cargo escolhido; os acessos aos apps precisam ser dados de novo.</p>
+          <div id="lista-inativas" class="lista-pessoas"></div>
+        </div>
       </section>
     </main>
   </div>
@@ -229,7 +252,7 @@
           <option value="admin">Administrador</option>
         </select>
       </label>
-      <fieldset class="campo-tags"><legend>Acesso aos apps <small>(valem quando você aprovar a conta)</small></legend><div id="convite-tags" class="caixas-tags"></div></fieldset>
+      <fieldset class="campo-tags"><legend>Acesso aos apps restritos <small>(valem quando você aprovar a conta)</small></legend><div id="convite-tags" class="caixas-tags"></div></fieldset>
       <p id="convite-erro" class="entrada-erro" role="alert" hidden></p>
       <div class="dlg-rodape"><button id="convite-cancelar" class="btn btn-sec" type="button">Cancelar</button><button id="convite-gerar" class="btn" type="submit">Gerar convite</button></div>
     </form>
@@ -251,6 +274,12 @@
       <p id="acessos-erro" class="entrada-erro" role="alert" hidden></p>
       <div class="dlg-rodape"><button id="acessos-cancelar" class="btn btn-sec" type="button">Cancelar</button><button id="acessos-salvar" class="btn" type="submit">Salvar acessos</button></div>
     </form>
+  </dialog>
+  <dialog id="dlg-confirmar-pessoas" aria-labelledby="confirmar-pessoas-titulo">
+    <span class="mono sobrancelha">// CONFIRMAR</span>
+    <h2 id="confirmar-pessoas-titulo"></h2>
+    <p class="dlg-texto" id="confirmar-pessoas-texto"></p>
+    <div class="dlg-rodape"><button id="confirmar-pessoas-cancelar" class="btn btn-sec" type="button">Cancelar</button><button id="confirmar-pessoas-ok" class="btn" type="button">Confirmar</button></div>
   </dialog>
   <div id="toasts" aria-live="polite"></div>
   <script type="module" src="app.js"></script>

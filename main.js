@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { latestRelease, download, compareVersions } from './lib/releases.js';
 import { installedPrograms, findInstalled, isRunning, hasWindow, kill, runInstaller, runUninstall } from './lib/windows.js';
 import { validateCatalog } from './lib/catalog.js';
+import { appRestrito, temAcesso } from './lib/acesso.js';
 import { createLog } from './lib/log.js';
 import { entrar, renovar, sair, perfil, cadastrar, rpc } from './lib/conta.js';
 
@@ -252,18 +253,20 @@ function loadCatalog({ fresh = false } = {}) {
 
 /** Tags de acesso da conta logada (vazio sem login ou com a conta ainda não ativa). */
 const minhasTags = () => (sessao?.perfil?.situacao === 'ativa' ? sessao.perfil.tags ?? [] : []);
+/** Regras de acesso do banco ({ [appId]: restrito }); null sem elas (a Central usa o catálogo). */
+const minhasRegras = () => sessao?.perfil?.regras ?? null;
 /**
- * App sem tag no catálogo é livre; com tag, precisa dela ou do godmod (que o banco só dá a
+ * App livre é de todos; restrito, só de quem tem a tag com o id dele ou o godmod (que o banco só dá a
  * administradores). A Central só esconde: quem garante de verdade é o banco de cada app.
  */
-const temAcesso = (a, tags = minhasTags()) => !a.tag || tags.includes(a.tag) || tags.includes('godmod');
+const acessoAoApp = (a) => temAcesso(a, minhasTags(), minhasRegras());
 
 /** Estado de cada app: versão instalada, última publicada, se está aberto. fresh: relê o catálogo do GitHub. */
 async function collectState({ fresh = false } = {}) {
   const [catalog, programs] = await Promise.all([loadCatalog({ fresh }), installedPrograms()]);
   const apps = await Promise.all((catalog.apps ?? []).map(async (a) => {
     const inst = findInstalled(programs, a.nomeWindows ?? a.nome);
-    const acesso = temAcesso(a);
+    const acesso = acessoAoApp(a);
     // sem acesso, só aparece se já estiver instalado (para poder desinstalar)
     if (!acesso && !inst) return null;
     let latest = null;
@@ -288,18 +291,12 @@ async function collectState({ fresh = false } = {}) {
       atualizacao: Boolean(acesso && installed && latest && compareVersions(latest.version, installed) > 0),
       rodando: installed ? await isRunning(a.executavel) : false,
       ocupado: busy.get(a.id) ?? null,
-      tag: a.tag ?? null,
+      tag: appRestrito(a, minhasRegras()) ? a.id : null,
       semAcesso: !acesso,
       erro,
     };
   }));
   return apps.filter(Boolean);
-}
-
-/** Apps do catálogo que exigem tag, para a seção Pessoas oferecer (ex.: [{ tag: 'fluxo', nome: 'Fluxo' }]). */
-async function tagsDoCatalogo() {
-  const { apps = [] } = await loadCatalog();
-  return apps.filter((a) => a.tag).map((a) => ({ tag: a.tag, nome: a.nome }));
 }
 
 async function catalogEntry(id) {
@@ -325,7 +322,7 @@ async function install(id, { fechar = false, segundoPlano = false } = {}) {
   let dir = null;
   try {
     const a = await catalogEntry(id);
-    if (!temAcesso(a)) throw new Error(`Você não tem acesso ao ${a.nome}. Peça a um administrador da HDL.`);
+    if (!acessoAoApp(a)) throw new Error(`Você não tem acesso ao ${a.nome}. Peça a um administrador da HDL.`);
     const wasRunning = await isRunning(a.executavel);
     if (wasRunning && !fechar) return { precisaFechar: true };
     setBusy(id, 'baixando');
@@ -594,22 +591,92 @@ handle('cadastrar', (dados) => cadastrarConta({
   nome: String(dados?.nome ?? ''), senha: String(dados?.senha ?? ''),
 }));
 handle('verificar-conta', () => atualizarPerfil());
-// administração: quem pode é conferido no banco (proprietário ou administrador da organização HDL)
-handle('pessoas', async () => {
-  const [pendentes, membros, convites, tags] = await Promise.all([
-    admin('list_pending_accounts'), admin('list_hdl_members'), admin('list_account_invites'), tagsDoCatalogo(),
+// administração: o banco confere de novo (proprietário ou administrador da organização HDL)
+const APP_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
+const PAPEIS = ['owner', 'admin', 'member', 'guest'];
+const soAdmin = () => {
+  if (sessao?.perfil?.situacao !== 'ativa' || !sessao.perfil.admin) throw new Error('Só administradores e proprietários da HDL podem fazer isso.');
+};
+const idDe = (v) => {
+  const n = Number(v);
+  if (typeof v === 'boolean' || v === null || !Number.isSafeInteger(n) || n <= 0) throw new Error('Pessoa inválida.');
+  return n;
+};
+const appDe = (v) => {
+  if (typeof v !== 'string' || !APP_RE.test(v) || v === 'godmod') throw new Error('App inválido.');
+  return v;
+};
+const papelDe = (v, validos = PAPEIS) => {
+  if (!validos.includes(v)) throw new Error('Cargo inválido.');
+  return v;
+};
+/** Administração: recusa quem não é administrador antes de falar com o banco. */
+const handleAdmin = (channel, fn) => handle(channel, (...args) => { soAdmin(); return fn(...args); });
+/** Depois de mudar acessos ou cargos, a própria conta pode ter mudado (tags, papel): relê e avisa a janela. */
+async function aposMudarAcessos() {
+  await atualizarPerfil().catch(() => {});
+  const apps = await collectState().catch(() => null); // a ação já deu certo: falha ao reler não vira erro
+  if (apps) send('estado', apps);
+}
+
+handleAdmin('pessoas', async () => {
+  const [pendentes, membros, convites, inativos, { apps = [] }] = await Promise.all([
+    admin('list_pending_accounts'), admin('list_hdl_members'), admin('list_account_invites'),
+    // banco ainda sem a migração das contas inativas: o resto da aba continua funcionando
+    admin('list_inactive_accounts').catch((err) => { log.warn(`pessoas: contas inativas indisponíveis (${err.message})`); return null; }),
+    loadCatalog(),
   ]);
-  return { pendentes: pendentes?.accounts ?? [], membros: membros?.members ?? [], convites: convites?.invites ?? [], tags };
+  const regras = minhasRegras();
+  return {
+    pendentes: pendentes?.accounts ?? [],
+    membros: membros?.members ?? [],
+    convites: convites?.invites ?? [],
+    inativos: inativos?.accounts ?? [],
+    apps: apps.map((a) => ({ id: a.id, nome: a.nome, icone: a.icone ?? null, restrito: appRestrito(a, regras), noBanco: typeof regras?.[a.id] === 'boolean' })),
+    eu: { id: sessao?.perfil?.id ?? null, papel: sessao?.perfil?.papel ?? null },
+  };
 });
 const listaDeTags = (tags) => (Array.isArray(tags) ? tags.map(String).slice(0, 50) : []);
-handle('convidar', (email, papel, tags) => acaoAdmin('create_account_invite',
+handleAdmin('convidar', (email, papel, tags) => acaoAdmin('create_account_invite',
   { p_email: String(email ?? ''), p_role: String(papel ?? 'member'), p_tags: listaDeTags(tags) },
   `criou um convite (${papel}${listaDeTags(tags).length ? `, tags: ${listaDeTags(tags).join(', ')}` : ''})`));
-handle('definir-tags', (id, tags) => acaoAdmin('set_account_tags', { p_user: Number(id), p_tags: listaDeTags(tags) },
-  `definiu as tags da conta ${id}: ${listaDeTags(tags).join(', ') || '(nenhuma)'}`));
-handle('revogar-convite', (id) => acaoAdmin('revoke_account_invite', { p_invite: Number(id) }, `revogou o convite ${id}`));
-handle('aprovar', (id) => acaoAdmin('approve_account', { p_user: Number(id) }, `aprovou a conta ${id}`));
-handle('recusar', (id) => acaoAdmin('reject_account', { p_user: Number(id) }, `recusou a conta ${id}`));
+handleAdmin('definir-tags', async (id, tags) => {
+  const r = await acaoAdmin('set_account_tags', { p_user: idDe(id), p_tags: listaDeTags(tags) },
+    `definiu as tags da conta ${id}: ${listaDeTags(tags).join(', ') || '(nenhuma)'}`);
+  await aposMudarAcessos();
+  return r;
+});
+handleAdmin('revogar-convite', (id) => acaoAdmin('revoke_account_invite', { p_invite: idDe(id) }, `revogou o convite ${id}`));
+handleAdmin('aprovar', (id) => acaoAdmin('approve_account', { p_user: idDe(id) }, `aprovou a conta ${id}`));
+handleAdmin('recusar', (id) => acaoAdmin('reject_account', { p_user: idDe(id) }, `recusou a conta ${id}`));
+handleAdmin('definir-cargo', async (id, papel) => {
+  const r = await acaoAdmin('hdl_set_role', { p_user: idDe(id), p_role: papelDe(papel) }, `mudou o cargo da conta ${id} para ${papel}`);
+  await aposMudarAcessos();
+  return r;
+});
+handleAdmin('remover-membro', async (id) => {
+  const r = await acaoAdmin('hdl_remove_member', { p_user: idDe(id) }, `removeu a conta ${id} da HDL`);
+  await aposMudarAcessos();
+  return r;
+});
+handleAdmin('reativar', async (id, papel) => {
+  const r = await acaoAdmin('hdl_reactivate', { p_user: idDe(id), p_role: papelDe(papel, ['admin', 'member', 'guest']) }, `reativou a conta ${id} como ${papel}`);
+  await aposMudarAcessos();
+  return r;
+});
+handleAdmin('regra-app', async (appId, restrito) => {
+  if (typeof restrito !== 'boolean') throw new Error('Diga se o app é livre ou restrito.');
+  const r = await acaoAdmin('set_app_rule', { p_app: appDe(appId), p_restricted: restrito }, `deixou o app ${appId} ${restrito ? 'restrito' : 'livre para todos'}`);
+  await aposMudarAcessos();
+  return r;
+});
+handleAdmin('acesso-app', async (appId, ids) => {
+  if (!Array.isArray(ids) || ids.length > 500) throw new Error('Lista de pessoas inválida.');
+  const lista = [...new Set(ids.map(idDe))];
+  const r = await acaoAdmin('set_app_members', { p_app: appDe(appId), p_users: lista }, `definiu quem acessa o app ${appId}: ${lista.length} pessoa(s)`);
+  await aposMudarAcessos();
+  return r;
+});
 handle('copiar', (texto) => clipboard.writeText(String(texto ?? '').slice(0, 4000)));
 
 // ------------------------------------------------------------ ciclo de vida
