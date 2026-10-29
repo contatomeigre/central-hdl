@@ -37,21 +37,31 @@ Depois da tela de carregamento, a Central pede login. A conta é a mesma do Pros
 
 Não existe mais código de cadastro único. Para alguém entrar:
 
-1. Um **proprietário ou administrador da organização HDL** (no Prosa) abre **Pessoas › Convidar pessoa**, informa o e-mail e o papel e copia a mensagem com o código. O convite vale 7 dias, é de uso único e pode ser revogado; o banco guarda só o hash do código. Só o proprietário convida administradores.
+1. Um **proprietário ou administrador da organização HDL** (no Prosa) abre **Pessoas › Convites › Novo convite**, informa o e-mail e o papel e copia a mensagem com o código. O convite vale 7 dias, é de uso único e pode ser revogado; o banco guarda só o hash do código. Só o proprietário convida administradores.
 2. A pessoa instala a Central, clica em **Criar minha conta** e usa o mesmo e-mail e o código. A conta nasce **pendente**: ela vê "Aguardando aprovação" e a Central confere sozinha a cada 30 s.
 3. O administrador aprova (ou recusa) em **Pessoas**. Ao aprovar, a pessoa entra na organização HDL com o papel do convite.
 
 Conta pendente ou recusada não acessa nada no Prosa: as regras do banco só reconhecem contas ativas. As regras ficam na migração `supabase/migrations/20261027180000_conta_hdl_convites.sql` do repositório do Prosa (o banco é o mesmo). A organização HDL é definida em `prosa_private.config.hdl_org_id`; a migração preenche sozinha quando só existe uma organização (ou uma só com "HDL" no nome).
 
-### Tags de acesso aos apps
+### Autorização na aba Pessoas
 
-Cada app do catálogo pode exigir uma **tag** (campo `"tag"`, ex.: `"fluxo"`). App sem tag é livre para todos (o Prosa é livre).
+Toda a autorização da Central e dos apps fica em **Pessoas** (seção Administração, visível só para administradores e proprietários da HDL), em quatro sub-abas:
 
-- Proprietários e administradores dão e tiram tags em **Pessoas › Membros e acessos aos apps › Acessos**, e podem já marcar as tags no convite (passam a valer quando a conta é aprovada).
-- **`godmod`** libera todos os apps e só vale para proprietários e administradores: o banco recusa dá-la a outra pessoa e a ignora se a pessoa deixar de ser administradora.
-- A Central esconde os apps sem acesso e não deixa instalá-los nem atualizá-los. Quem perdeu a tag de um app instalado vê o cartão como **Sem acesso**, só com o botão de desinstalar.
-- A Central relê as tags a cada verificação (30 min) e em **Procurar atualizações**: o que um administrador muda chega sozinho.
-- **Quem garante o acesso é o banco de cada app, não a Central** (os instaladores ficam em repositórios públicos). Nas regras de acesso do app, use `prosa_private.has_app_access('<tag>')`. Tabelas e funções na migração `20261028150000_tags_de_acesso.sql` do repositório do Prosa.
+- **Pessoas:** quem aguarda aprovação e os membros. Cada membro tem **cargo** (Convidado, Membro, Administrador ou Proprietário), os apps que acessa, **Acessos** e **Remover**. As regras são as do Prosa: só o **proprietário** dá ou tira administrador/proprietário; administrador só mexe em convidados e membros; ninguém muda o próprio cargo nem remove a si mesmo; sempre resta um proprietário. Mudar cargo para ou de Administrador/Proprietário pede confirmação.
+- **Apps:** a regra de cada app do catálogo, **Livre para todos** ou **Restrito**, e, quando restrito, quem tem acesso (caixas de marcar e **Salvar acessos**, que grava a lista inteira). Quem tem `godmod` aparece marcado e travado ("acesso total").
+- **Convites:** convites dos últimos 30 dias e **Novo convite** (ver acima).
+- **Inativas:** contas **removidas** ou **recusadas**, com **Reativar** no cargo escolhido (Administrador só pelo proprietário). Os acessos aos apps precisam ser dados de novo.
+
+**Remover** tira a pessoa da organização HDL e **desativa a conta** (situação "removida", sem tags): ela perde o acesso a todos os apps e, ao abrir a Central, vê "Seu acesso à HDL foi encerrado.". Dá para reativar em Inativas.
+
+#### Regra de cada app
+
+- **A regra (livre ou restrito) fica no banco** e é gerida em Pessoas › Apps. A Central lê as regras no login e as guarda no perfil da sessão (funcionam sem internet). Se o banco ainda não tiver a função `app_access_rules`, a Central usa o catálogo.
+- O campo **`tag`** no `catalogo.json` virou só o **padrão inicial** de um app novo: sem regra no banco, o app com `tag` nasce **restrito** até um administrador decidir (o cartão em Apps avisa "Regra padrão do catálogo: salve para valer pelo banco."). App sem `tag` nasce livre (o Prosa é livre).
+- **A tag de acesso de um app é o próprio `id` dele** (`fluxo`, `financeiro`…). **`godmod`** libera todos os apps e só vale para proprietários e administradores: o banco recusa dá-la a outra pessoa e a ignora se a pessoa deixar de ser administradora.
+- A Central esconde os apps restritos sem acesso e não deixa instalá-los nem atualizá-los. Quem perdeu o acesso a um app instalado vê o cartão como **Sem acesso**, só com o botão de desinstalar. Ela relê tags e regras a cada verificação (30 min) e em **Procurar atualizações**.
+- **Quem garante o acesso é o banco de cada app, não a Central** (os instaladores ficam em repositórios públicos). Nas regras de acesso do app, use `prosa_private.has_app_access('<id do app>')`. Tabelas e funções nas migrações `20261028150000_tags_de_acesso.sql` e `20261029150000_central_acessos.sql` do repositório do Prosa.
+- Os botões de administração só aparecem para administradores, o processo principal recusa as ações de quem não é administrador, e o banco confere de novo.
 
 ## Onde fica cada coisa
 
@@ -134,7 +144,7 @@ Copie o código e aperte Enter; feche a aba que abrir no navegador normal. Depoi
    ```
    - `nomeWindows` é o nome que aparece em "Aplicativos instalados" (sem a versão), normalmente o `productName`.
    - `executavel` é o `.exe` dentro da pasta de instalação.
-   - `tag` (opcional) é a tag de acesso: só quem a tem (ou `godmod`) vê e instala o app. Sem ela, o app é livre para todos. Letras minúsculas, números e hífen; não pode ser `godmod`.
+   - `tag` (opcional) é só o **padrão inicial** do app: com ela, o app nasce restrito até um administrador decidir em Pessoas › Apps (a regra de verdade fica no banco); sem ela, nasce livre. Letras minúsculas, números e hífen; não pode ser `godmod`.
    - `cor` (opcional, `#rrggbb`) é a cor de destaque da tela de abertura do app; sem ela, usa o ciano da Central.
 
 Ao clicar em **Abrir**, todo app do catálogo ganha a mesma tela de abertura, montada a partir da entrada dele (nome, ícone, versão, executável e `cor`). As etapas são reais: verifica a instalação, inicia o `.exe` e espera a janela do app aparecer (até 20 s; se não aparecer, avisa que ele abriu em segundo plano). Se falhar, a tela mostra o motivo e um botão **Fechar**. Não é preciso nada no app novo para ter essa tela.
