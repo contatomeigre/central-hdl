@@ -9,6 +9,7 @@ import { parseRegistry, findInstalled, folderOf } from '../lib/windows.js';
 import { entrar, renovar, perfil, sair, cadastrar } from '../lib/conta.js';
 import { validateCatalog } from '../lib/catalog.js';
 import { createLog } from '../lib/log.js';
+import { appRestrito, temAcesso } from '../lib/acesso.js';
 
 test('latest.yml do electron-builder', () => {
   const yml = [
@@ -116,9 +117,9 @@ test('conta HDL: entrar, renovar, perfil e mensagens de erro', async () => {
 
   // perfil (account_status): só os campos usados, cor validada, situação e papel em português
   const p = await perfil(resposta(200, { id: 7, username: 'ana', displayName: 'Ana Lima', avatarColor: '#2f6f5e', status: 'active', hdlRole: 'admin', isAdmin: true }), cfg, 'a1');
-  assert.deepEqual(p, { id: 7, usuario: 'ana', nome: 'Ana Lima', cor: '#2f6f5e', situacao: 'ativa', papel: 'admin', admin: true, tags: [] });
-  assert.match(chamadas.at(-1).url, /\/rest\/v1\/rpc\/account_status$/);
-  assert.equal(chamadas.at(-1).init.headers.authorization, 'Bearer a1');
+  assert.deepEqual(p, { id: 7, usuario: 'ana', nome: 'Ana Lima', cor: '#2f6f5e', situacao: 'ativa', papel: 'admin', admin: true, tags: [], regras: null });
+  assert.ok(chamadas.some((c) => /\/rest\/v1\/rpc\/account_status$/.test(c.url)));
+  assert.ok(chamadas.every((c) => c.init.headers.authorization === 'Bearer a1' || !/rpc/.test(c.url)));
   const pendente = await perfil(resposta(200, { id: 8, username: 'bia', avatarColor: 'red;background:url(x)', status: 'pending', hdlRole: null, isAdmin: false }), cfg, 'a1');
   assert.equal(pendente.cor, null);
   assert.equal(pendente.nome, 'bia');
@@ -262,4 +263,44 @@ test('tags de acesso: catálogo e perfil', async () => {
   assert.deepEqual(p.tags, ['fluxo', 'godmod']);
   const antigo = await perfil(resposta({ id: 2, username: 'bia', status: 'active' }), cfg, 't'); // banco sem a migração de tags
   assert.deepEqual(antigo.tags, []);
+});
+
+test('acesso aos apps: regra do banco vence o catálogo', () => {
+  const livre = { id: 'prosa' };
+  const comTag = { id: 'fluxo', tag: 'fluxo' };
+  // sem regra no banco: o tag do catálogo é o padrão
+  assert.equal(appRestrito(livre, {}), false);
+  assert.equal(appRestrito(comTag, {}), true);
+  assert.equal(appRestrito(comTag, null), true);
+  // a regra do banco vence, nos dois sentidos
+  assert.equal(appRestrito(comTag, { fluxo: false }), false);
+  assert.equal(appRestrito(livre, { prosa: true }), true);
+  // livre: todo mundo; restrito: a tag é o id do app, ou godmod
+  assert.equal(temAcesso(livre, [], {}), true);
+  assert.equal(temAcesso(comTag, [], null), false);
+  assert.equal(temAcesso(comTag, ['fluxo'], null), true);
+  assert.equal(temAcesso(comTag, ['financeiro'], {}), false);
+  assert.equal(temAcesso(comTag, ['godmod'], {}), true);
+  assert.equal(temAcesso(comTag, [], { fluxo: false }), true);
+  assert.equal(temAcesso(livre, [], { prosa: true }), false);
+  assert.equal(temAcesso(livre, ['prosa'], { prosa: true }), true);
+  // sem tag no catálogo, o id é a tag; o tag antigo do catálogo ainda vale por compatibilidade
+  assert.equal(temAcesso({ id: 'fluxo', tag: 'outro' }, ['outro'], {}), true);
+  assert.equal(temAcesso({ id: 'fluxo', tag: 'outro' }, ['fluxo'], {}), true);
+});
+
+test('perfil: regras do banco, conta removida e banco sem a função', async () => {
+  const cfg = { url: 'https://exemplo.supabase.co', chave: 'pub' };
+  const conta = { id: 3, username: 'caio', status: 'removed' };
+  const servidor = (regras) => async (url) => (url.endsWith('/app_access_rules') ? regras() : new Response(JSON.stringify(conta), { status: 200 }));
+  const p = await perfil(servidor(() => new Response(JSON.stringify({ rules: [
+    { appId: 'fluxo', restricted: true }, { appId: 'prosa', restricted: false }, { appId: 'x', restricted: 'sim' }, null,
+  ] }), { status: 200 })), cfg, 't');
+  assert.equal(p.situacao, 'removida');
+  assert.deepEqual(p.regras, { fluxo: true, prosa: false });
+  // função ainda não existe no banco (404 / PGRST202) ou outro erro: o login segue, com o catálogo
+  const sem = await perfil(servidor(() => new Response(JSON.stringify({ code: 'PGRST202', message: 'not found' }), { status: 404 })), cfg, 't');
+  assert.equal(sem.regras, null);
+  const rede = await perfil(servidor(() => { throw new TypeError('fetch failed'); }), cfg, 't');
+  assert.equal(rede.regras, null);
 });
