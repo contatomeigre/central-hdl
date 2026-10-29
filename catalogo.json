@@ -32,6 +32,18 @@
       "icone": "https://raw.githubusercontent.com/hdldev123/central-hdl/main/icones/financeiro.png",
       "cor": "#22d3ee",
       "tag": "financeiro"
+    },
+    {
+      "id": "mesa-pauta",
+      "nome": "Mesa de Pauta",
+      "descricao": "Conduz reuniões pela pauta, com tempo por tópico, decisões e encaminhamentos, e gera a ata em PDF.",
+      "categoria": "Produtividade",
+      "repo": "hdldev123/mesa-pauta-releases",
+      "nomeWindows": "Mesa de Pauta",
+      "executavel": "Mesa de Pauta.exe",
+      "icone": "https://raw.githubusercontent.com/hdldev123/central-hdl/main/icones/mesa-pauta.png",
+      "cor": "#2B4FD8",
+      "tag": "mesa-pauta"
     }
   ]
 }
